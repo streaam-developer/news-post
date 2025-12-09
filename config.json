@@ -8,14 +8,16 @@
   
   },
 
-  "source": {
-  "mode": "rss",
-  "rss_url": "https://www.hindustantimes.com/feeds/rss/business/rssfeed.xml",
-  "full_content_from_article_page": true,
-  "article_content_selector": "div.articleDetail_artContent__F_8dX",
-  "title_selector": "h1",
-  "timezone": "Asia/Kolkata"
-},
+  "sources": [
+    {
+      "mode": "rss",
+      "rss_url": "https://www.hindustantimes.com/feeds/rss/business/rssfeed.xml",
+      "full_content_from_article_page": true,
+      "article_content_selector": "div.articleDetail_artContent__F_8dX",
+      "title_selector": "h1",
+      "timezone": "Asia/Kolkata"
+    }
+  ],
 
   "targets": [
     {

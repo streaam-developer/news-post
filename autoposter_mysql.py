@@ -661,7 +661,7 @@ class AutoPoster:
         db_cfg = DBConfig(**raw["db"])
         self.db = DB(db_cfg)
 
-        self.source_cfg = SourceConfig(**raw["source"])
+        self.sources_cfg = [SourceConfig(**s) for s in raw["sources"]]
         self.targets_cfg = [TargetConfig(**t) for t in raw["targets"]]
         self.runtime_cfg = RuntimeConfig(**raw["runtime"])
 
@@ -669,7 +669,7 @@ class AutoPoster:
             getattr(logging, self.runtime_cfg.log_level.upper(), logging.INFO)
         )
 
-        self.fetcher = SourceFetcher(self.source_cfg, self.runtime_cfg)
+        self.fetchers = [SourceFetcher(cfg, self.runtime_cfg) for cfg in self.sources_cfg]
         self.clients: List[WordPressClient] = []
         self.site_tables: Dict[str, str] = {}
 
