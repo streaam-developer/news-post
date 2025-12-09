@@ -37,7 +37,7 @@ class DBConfig:
     user: str
     password: str
     database: str
-    port: int = 3306  # ✅ port support
+    port: int
 
 
 @dataclass
