@@ -125,7 +125,7 @@ class DBConfig:
 @dataclass
 class SourceConfig:
     mode: str
-    rss_url: str
+    rss_url: List[str]
     full_content_from_article_page: bool
     article_content_selector: str
     title_selector: str
@@ -301,29 +301,30 @@ class SourceFetcher:
             logging.error("Only RSS mode supported for now.")
             return []
 
-        logging.info(f"[SRC] Fetching RSS: {self.cfg.rss_url}")
-        try:
-            resp = self.session.get(self.cfg.rss_url, timeout=20)
-            resp.raise_for_status()
-        except Exception as e:
-            logging.error(f"[SRC] RSS fetch error: {e}")
-            return []
-
-        logging.info(f"[SRC] RSS HTTP status={resp.status_code}, len={len(resp.text)}")
-
-        # Parse as XML if possible, fallback to html.parser
-        try:
-            soup = BeautifulSoup(resp.text, "xml")
-        except Exception as e:
-            logging.warning(f"[SRC] XML parser failed ({e}), falling back to html.parser")
-            soup = BeautifulSoup(resp.text, "html.parser")
-
-        items = soup.find_all("item")
-        logging.info(f"[SRC] RSS items found: {len(items)}")
-
         new_posts: List[PostItem] = []
 
-        for idx, it in enumerate(items):
+        for rss_url in self.cfg.rss_url:
+            logging.info(f"[SRC] Fetching RSS: {rss_url}")
+            try:
+                resp = self.session.get(rss_url, timeout=20)
+                resp.raise_for_status()
+            except Exception as e:
+                logging.error(f"[SRC] RSS fetch error for {rss_url}: {e}")
+                continue
+
+            logging.info(f"[SRC] RSS HTTP status={resp.status_code}, len={len(resp.text)}")
+
+            # Parse as XML if possible, fallback to html.parser
+            try:
+                soup = BeautifulSoup(resp.text, "xml")
+            except Exception as e:
+                logging.warning(f"[SRC] XML parser failed ({e}), falling back to html.parser")
+                soup = BeautifulSoup(resp.text, "html.parser")
+
+            items = soup.find_all("item")
+            logging.info(f"[SRC] RSS items found in {rss_url}: {len(items)}")
+
+            for idx, it in enumerate(items):
             guid_tag = it.find("guid")
             link_tag = it.find("link")
             title_tag = it.find("title")
@@ -386,15 +387,15 @@ class SourceFetcher:
 
             logging.info(f"[SRC] GUID={guid} content length after extract: {len(content_html)}")
 
-            item = PostItem(
-                guid=guid,
-                url=url,
-                title=title,
-                content_html=content_html,
-                published_at=published_at,
-                rss_categories=rss_cats,
-            )
-            new_posts.append(item)
+                item = PostItem(
+                    guid=guid,
+                    url=url,
+                    title=title,
+                    content_html=content_html,
+                    published_at=published_at,
+                    rss_categories=rss_cats,
+                )
+                new_posts.append(item)
 
         logging.info(f"[SRC] New posts collected this cycle: {len(new_posts)}")
         return new_posts
@@ -697,9 +698,11 @@ class AutoPoster:
 
     def single_cycle(self):
         logging.info("----- NEW CYCLE -----")
-        new_items = self.fetcher.fetch_new(self.db)
+        new_items = []
+        for fetcher in self.fetchers:
+            new_items.extend(fetcher.fetch_new(self.db))
         if not new_items:
-            logging.info("[CYCLE] No new posts in source feed.")
+            logging.info("[CYCLE] No new posts in source feeds.")
             return
 
         logging.info(f"[CYCLE] Items to process (after source dedup): {len(new_items)}")
