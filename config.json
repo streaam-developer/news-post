@@ -11,8 +11,8 @@
   "source": {
     "mode": "rss",
     "rss_url": "https://www.hindustantimes.com/feeds/rss/business/rssfeed.xml",
-    "full_content_from_article_page": true,
-    "article_content_selector": "section.articleDetail_mainContainer__e_pg6",
+    "full_content_from_article_page": false,
+    "article_content_selector": "",
     "title_selector": "h1",
     "timezone": "Asia/Kolkata"
   },
