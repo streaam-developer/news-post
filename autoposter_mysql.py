@@ -77,6 +77,8 @@ class PostItem:
     title: str
     content_html: str
     published_at: Optional[datetime]
+    image_url: Optional[str] = None
+    category: Optional[str] = None
 
 
 # ------------- DB LAYER (MySQL) -------------
@@ -266,6 +268,14 @@ class SourceFetcher:
                     logging.warning(f"[SRC] Failed to parse date for GUID={guid}: {e}")
                     published_at = None
 
+            image_tag = it.find("media:content")
+            image_url = image_tag.get("url") if image_tag and image_tag.get("url") else None
+            logging.info(f"[SRC] Item #{idx} IMAGE_URL={image_url}")
+
+            category_tag = it.find("category")
+            category = category_tag.text.strip() if category_tag and category_tag.text else None
+            logging.info(f"[SRC] Item #{idx} CATEGORY={category}")
+
             # Always fetch article page content if full_content_from_article_page = True
             if self.cfg.full_content_from_article_page:
                 content_html = self._fetch_article_content(url, guid)
@@ -280,7 +290,9 @@ class SourceFetcher:
                 url=url,
                 title=title,
                 content_html=content_html,
-                published_at=published_at
+                published_at=published_at,
+                image_url=image_url,
+                category=category
             )
             new_posts.append(item)
 
@@ -339,13 +351,31 @@ class WordPressClient:
     def _media_endpoint(self) -> str:
         return f"{self.cfg.base_url.rstrip('/')}/wp-json/wp/v2/media"
 
+    def _categories_endpoint(self) -> str:
+        return f"{self.cfg.base_url.rstrip('/')}/wp-json/wp/v2/categories"
+
+    def get_category_id_by_name(self, name: str) -> Optional[int]:
+        try:
+            r = self.session.get(f"{self._categories_endpoint()}?search={name}", timeout=20)
+            if r.status_code == 200:
+                data = r.json()
+                for cat in data:
+                    if cat.get("name", "").lower() == name.lower():
+                        return cat.get("id")
+            return None
+        except Exception as e:
+            logging.warning(f"[{self.cfg.name}] Failed to get category ID for {name}: {e}")
+            return None
+
     def _guess_mime_from_url(self, url: str) -> str:
         mime, _ = mimetypes.guess_type(url)
         if not mime:
             return "image/jpeg"
         return mime
 
-    def _upload_and_rehost_images(self, html: str, guid: str) -> (str, Optional[int]):
+    def _upload_and_rehost_images(self, item: PostItem) -> (str, Optional[int]):
+        html = item.content_html
+        guid = item.guid
         if not html:
             logging.info(f"[{self.cfg.name}] Empty HTML for GUID={guid}, skipping image rehost.")
             return html, None
@@ -353,69 +383,84 @@ class WordPressClient:
         soup = BeautifulSoup(html, "html.parser")
         imgs = soup.find_all("img")
         logging.info(f"[{self.cfg.name}] GUID={guid} images found in content: {len(imgs)}")
-        if not imgs:
-            return html, None
 
         featured_media_id = None
 
+        # First, upload the RSS image as featured if present
+        if item.image_url:
+            try:
+                logging.info(f"[{self.cfg.name}] GUID={guid} downloading RSS image: {item.image_url}")
+                img_resp = requests.get(item.image_url, timeout=20)
+                img_resp.raise_for_status()
+                img_bytes = img_resp.content
+                filename = item.image_url.split("/")[-1].split("?")[0] or "featured.jpg"
+                mime_type = self._guess_mime_from_url(item.image_url)
+
+                files = {'file': (filename, img_bytes, mime_type)}
+                headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+
+                r = self.session.post(self._media_endpoint(), files=files, headers=headers, timeout=40)
+                if r.status_code in (200, 201):
+                    data = r.json()
+                    media_id = data.get("id")
+                    if media_id:
+                        featured_media_id = media_id
+                        logging.info(f"[{self.cfg.name}] GUID={guid} RSS image uploaded as featured, id={media_id}")
+                    else:
+                        logging.error(f"[{self.cfg.name}] GUID={guid} missing media id for RSS image")
+                else:
+                    logging.error(f"[{self.cfg.name}] GUID={guid} RSS image upload failed {r.status_code}: {r.text[:300]}")
+            except Exception as e:
+                logging.warning(f"[{self.cfg.name}] GUID={guid} RSS image download/upload failed: {e}")
+
+        # Then, upload content images
         for idx, img in enumerate(imgs):
             src = img.get("src")
             if not src:
                 continue
 
             try:
-                logging.info(f"[{self.cfg.name}] GUID={guid} downloading image #{idx}: {src}")
+                logging.info(f"[{self.cfg.name}] GUID={guid} downloading content image #{idx}: {src}")
                 img_resp = requests.get(src, timeout=20)
                 img_resp.raise_for_status()
                 img_bytes = img_resp.content
             except Exception as e:
-                logging.warning(f"[{self.cfg.name}] GUID={guid} image download failed ({src}): {e}")
+                logging.warning(f"[{self.cfg.name}] GUID={guid} content image download failed ({src}): {e}")
                 continue
 
             filename = src.split("/")[-1].split("?")[0] or f"image_{idx}.jpg"
             mime_type = self._guess_mime_from_url(src)
 
-            files = {
-                'file': (filename, img_bytes, mime_type)
-            }
-            headers = {
-                "Content-Disposition": f'attachment; filename="{filename}"'
-            }
+            files = {'file': (filename, img_bytes, mime_type)}
+            headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
 
             try:
-                logging.info(f"[{self.cfg.name}] GUID={guid} uploading image to media: {filename}")
-                r = self.session.post(
-                    self._media_endpoint(),
-                    files=files,
-                    headers=headers,
-                    timeout=40
-                )
+                logging.info(f"[{self.cfg.name}] GUID={guid} uploading content image to media: {filename}")
+                r = self.session.post(self._media_endpoint(), files=files, headers=headers, timeout=40)
             except Exception as e:
-                logging.error(f"[{self.cfg.name}] GUID={guid} media upload error: {e}")
+                logging.error(f"[{self.cfg.name}] GUID={guid} content media upload error: {e}")
                 continue
 
             if r.status_code not in (200, 201):
-                logging.error(f"[{self.cfg.name}] GUID={guid} media upload failed {r.status_code}: {r.text[:300]}")
+                logging.error(f"[{self.cfg.name}] GUID={guid} content media upload failed {r.status_code}: {r.text[:300]}")
                 continue
 
             try:
                 data = r.json()
             except Exception:
-                logging.error(f"[{self.cfg.name}] GUID={guid} invalid JSON in media response")
+                logging.error(f"[{self.cfg.name}] GUID={guid} invalid JSON in content media response")
                 continue
 
             new_url = data.get("source_url")
             media_id = data.get("id")
-            logging.info(f"[{self.cfg.name}] GUID={guid} media uploaded, id={media_id}, new_url={new_url}")
+            logging.info(f"[{self.cfg.name}] GUID={guid} content media uploaded, id={media_id}, new_url={new_url}")
 
             if not new_url or not media_id:
-                logging.error(f"[{self.cfg.name}] GUID={guid} missing media data in response")
+                logging.error(f"[{self.cfg.name}] GUID={guid} missing media data in content response")
                 continue
 
-            # ✅ Only SRC change, class wagaira ko touch nahi kar rahe
             img["src"] = new_url
-            if featured_media_id is None:
-                featured_media_id = media_id
+            # Do not set as featured if already set
 
         final_html = str(soup)
         logging.info(f"[{self.cfg.name}] GUID={guid} final HTML length after rehost: {len(final_html)}")
@@ -423,7 +468,7 @@ class WordPressClient:
 
     def create_post(self, item: PostItem) -> (bool, Optional[int], Optional[int]):
         logging.info(f"[{self.cfg.name}] Preparing post for GUID={item.guid}, TITLE={item.title!r}")
-        processed_html, featured_media_id = self._upload_and_rehost_images(item.content_html, item.guid)
+        processed_html, featured_media_id = self._upload_and_rehost_images(item)
 
         payload: Dict[str, Any] = {
             "title": item.title,
@@ -434,8 +479,14 @@ class WordPressClient:
         if item.published_at is not None:
             payload["date"] = item.published_at.isoformat()
 
-        if self.cfg.default_categories:
-            payload["categories"] = self.cfg.default_categories
+        categories = self.cfg.default_categories[:]
+        if item.category:
+            cat_id = self.get_category_id_by_name(item.category)
+            if cat_id:
+                categories.append(cat_id)
+        if categories:
+            payload["categories"] = categories
+
         if self.cfg.default_tags:
             payload["tags"] = self.cfg.default_tags
 
