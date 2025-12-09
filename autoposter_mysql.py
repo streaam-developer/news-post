@@ -11,6 +11,7 @@ from urllib.parse import urljoin, urlparse
 import mimetypes
 
 import requests
+import cloudscraper
 from bs4 import BeautifulSoup
 from dateutil import parser as dateparser
 import pytz
@@ -414,7 +415,8 @@ class WordPressClient:
         if item.image_url:
             try:
                 logging.info(f"[{self.cfg.name}] GUID={guid} downloading RSS image: {item.image_url}")
-                img_resp = requests.get(item.image_url, timeout=20)
+                scraper = cloudscraper.create_scraper()
+                img_resp = scraper.get(item.image_url, timeout=20)
                 img_resp.raise_for_status()
                 img_bytes = img_resp.content
                 filename = item.image_url.split("/")[-1].split("?")[0] or "featured.jpg"
@@ -445,7 +447,8 @@ class WordPressClient:
 
             try:
                 logging.info(f"[{self.cfg.name}] GUID={guid} downloading content image #{idx}: {src}")
-                img_resp = requests.get(src, timeout=20)
+                scraper = cloudscraper.create_scraper()
+                img_resp = scraper.get(src, timeout=20)
                 img_resp.raise_for_status()
                 img_bytes = img_resp.content
             except Exception as e:
