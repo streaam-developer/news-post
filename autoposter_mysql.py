@@ -4,7 +4,7 @@ import logging
 import time
 import traceback
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from urllib.parse import urljoin, urlparse
@@ -26,14 +26,14 @@ logging.basicConfig(
 logging.info("=== AutoPoster script starting ===")
 
 
-# ---------- CLEAN ARTICLE EXTRACTOR (HT specific, but generic-safe) ----------
+# ---------- CLEAN ARTICLE EXTRACTOR ----------
 
 def clean_article_content(page_html: str, base_url: str, selector: Optional[str] = None) -> str:
     """
     Page HTML se sirf clean article content nikale:
     - h2, p, ul/li, img
     - Ads / Taboola / storyAd / iframes / scripts hata de
-    - Classes, inline styles remove (hum khud simple HTML banayenge)
+    - Classes, inline styles ignore (hum khud simple HTML banayenge)
     """
     if not page_html:
         return ""
@@ -46,32 +46,30 @@ def clean_article_content(page_html: str, base_url: str, selector: Optional[str]
 
     container = None
 
-    # 1) Agar config me selector diya ho to pehle use try karo
+    # 1) Config selector
     if selector:
         container = soup.select_one(selector)
 
-    # 2) Nahi mila to HT ka main content wrapper try karo
+    # 2) HindustanTimes ka known wrapper
     if container is None:
         container = soup.find("div", class_="articleDetail_artContent__F_8dX")
 
-    # 3) Agar phir bhi nahi mila to full body se try kar lo (fallback)
+    # 3) Fallback: body
     if container is None:
         container = soup.body or soup
 
-    # Ab is container ke andar se clean content banana hai
-
-    # Pehle ads / taboola / poll / sponsored blocks remove
+    # Ads / taboola / poll blocks remove
     for bad in container.select(
         ".storyAd, .trc_related_container, .taboola-readmore, "
         ".pollDivElement, #taboola-article-recommendation, #taboola-story-101765264870828"
     ):
         bad.decompose()
 
-    # Jo cheezein bilkul nahi chahiye:
+    # Scripts, styles, iframes remove
     for tag in container.find_all(["script", "style", "iframe", "noscript"]):
         tag.decompose()
 
-    # Relative URLs fix for links & images inside container
+    # Fix relative URLs
     for tag in container.find_all(["a", "img", "source"]):
         if tag.name == "a" and tag.has_attr("href"):
             tag["href"] = urljoin(base_url, tag["href"])
@@ -80,24 +78,20 @@ def clean_article_content(page_html: str, base_url: str, selector: Optional[str]
 
     clean_parts: List[str] = []
 
-    # Container ke andar jo bhi sequence me h2/p/ul/img aa rahe hain, unka plain HTML banayenge
     for node in container.descendants:
         if not hasattr(node, "name"):
             continue
 
-        # Headings
         if node.name == "h2":
             text = node.get_text(strip=True)
             if text:
                 clean_parts.append(f"<h2>{text}</h2>")
 
-        # Paragraphs
         elif node.name == "p":
             text = node.get_text(strip=True)
             if text:
                 clean_parts.append(f"<p>{text}</p>")
 
-        # Lists
         elif node.name == "ul":
             lis = []
             for li in node.find_all("li", recursive=False):
@@ -107,7 +101,6 @@ def clean_article_content(page_html: str, base_url: str, selector: Optional[str]
             if lis:
                 clean_parts.append(f"<ul>{''.join(lis)}</ul>")
 
-        # Article images
         elif node.name == "img":
             src = node.get("src") or node.get("data-src")
             if src:
@@ -166,6 +159,7 @@ class PostItem:
     title: str
     content_html: str
     published_at: Optional[datetime]
+    rss_categories: List[str] = field(default_factory=list)
 
 
 # ------------- DB LAYER (MySQL) -------------
@@ -358,7 +352,13 @@ class SourceFetcher:
 
             title = title_tag.text.strip() if title_tag and title_tag.text else "(No title)"
 
-            logging.info(f"[SRC] Item #{idx} GUID={guid} URL={url} TITLE={title}")
+            # RSS categories (e.g. <category>business</category>)
+            rss_cats = []
+            for c in it.find_all("category"):
+                if c.text and c.text.strip():
+                    rss_cats.append(c.text.strip())
+
+            logging.info(f"[SRC] Item #{idx} GUID={guid} URL={url} TITLE={title} CATS={rss_cats}")
 
             if not guid or not url:
                 logging.warning(f"[SRC] Skipping item #{idx} because GUID or URL missing")
@@ -392,7 +392,8 @@ class SourceFetcher:
                 url=url,
                 title=title,
                 content_html=content_html,
-                published_at=published_at
+                published_at=published_at,
+                rss_categories=rss_cats,
             )
             new_posts.append(item)
 
@@ -410,14 +411,12 @@ class SourceFetcher:
 
         logging.info(f"[SRC] Article HTTP status={resp.status_code}, length={len(resp.text)}")
 
-        # HT specific clean + generic-safe
-        logging.info(f"[SRC] Using selector from config: {self.cfg.article_content_selector}")
         html = clean_article_content(resp.text, url, selector=self.cfg.article_content_selector)
         logging.info(f"[SRC] Extracted HTML length for GUID={guid}: {len(html)}")
         return html
 
 
-# ------------- WORDPRESS CLIENT (REST + MEDIA) -------------
+# ------------- WORDPRESS CLIENT (REST + MEDIA + CATEGORIES) -------------
 
 class WordPressClient:
     def __init__(self, cfg: TargetConfig, runtime: RuntimeConfig):
@@ -430,19 +429,81 @@ class WordPressClient:
         parsed = urlparse(self.cfg.base_url)
         self.domain = parsed.netloc.split(":")[0]
 
+        # cache: category_name_lower -> id
+        self._category_cache: Dict[str, int] = {}
+
     def _posts_endpoint(self) -> str:
         return f"{self.cfg.base_url.rstrip('/')}/wp-json/wp/v2/{self.cfg.post_type}"
 
     def _media_endpoint(self) -> str:
         return f"{self.cfg.base_url.rstrip('/')}/wp-json/wp/v2/media"
 
-    def _guess_mime_from_url(self, url: str) -> str:
+    def _categories_endpoint(self) -> str:
+        return f"{self.cfg.base_url.rstrip('/')}/wp-json/wp/v2/categories"
+
+    @staticmethod
+    def _guess_mime_from_url(url: str) -> str:
         mime, _ = mimetypes.guess_type(url)
         if not mime:
             return "image/jpeg"
         return mime
 
-    def _upload_and_rehost_images(self, html: str, guid: str) -> (str, Optional[int]):
+    @staticmethod
+    def _slugify(name: str) -> str:
+        s = name.strip().lower()
+        s = re.sub(r'[^a-z0-9]+', '-', s)
+        s = s.strip('-')
+        return s or "category"
+
+    def _ensure_categories(self, names: List[str]) -> List[int]:
+        """RSS category names ko WP categories me map kare (auto-create if needed)"""
+        ids: List[int] = []
+        for name in names:
+            if not name:
+                continue
+            key = name.strip().lower()
+            if key in self._category_cache:
+                ids.append(self._category_cache[key])
+                continue
+
+            slug = self._slugify(name)
+            # 1) Try to fetch existing category by slug
+            try:
+                r = self.session.get(self._categories_endpoint(), params={"slug": slug}, timeout=20)
+                if r.status_code == 200:
+                    arr = r.json()
+                    if isinstance(arr, list) and arr:
+                        cat_id = arr[0].get("id")
+                        if cat_id:
+                            self._category_cache[key] = cat_id
+                            ids.append(cat_id)
+                            logging.info(f"[{self.cfg.name}] Using existing category '{name}' (id={cat_id})")
+                            continue
+            except Exception as e:
+                logging.warning(f"[{self.cfg.name}] Category GET error for '{name}': {e}")
+
+            # 2) Create new category
+            try:
+                payload = {"name": name, "slug": slug}
+                r = self.session.post(self._categories_endpoint(), json=payload, timeout=20)
+                if r.status_code in (200, 201):
+                    data = r.json()
+                    cat_id = data.get("id")
+                    if cat_id:
+                        self._category_cache[key] = cat_id
+                        ids.append(cat_id)
+                        logging.info(f"[{self.cfg.name}] Created category '{name}' (id={cat_id})")
+                else:
+                    logging.error(
+                        f"[{self.cfg.name}] Failed to create category '{name}' "
+                        f"status={r.status_code} resp={r.text[:200]}"
+                    )
+            except Exception as e:
+                logging.error(f"[{self.cfg.name}] Category POST error for '{name}': {e}")
+
+        return ids
+
+    def _upload_and_rehost_images(self, html: str, guid: str, source_url: str) -> (str, Optional[int]):
         if not html:
             logging.info(f"[{self.cfg.name}] Empty HTML for GUID={guid}, skipping image rehost.")
             return html, None
@@ -462,11 +523,18 @@ class WordPressClient:
 
             try:
                 logging.info(f"[{self.cfg.name}] GUID={guid} downloading image #{idx}: {src}")
-                img_resp = requests.get(src, timeout=20)
-                img_resp.raise_for_status()
-                img_bytes = img_resp.content
+                # 👉 HOTLINK FIX: send Referer (original article URL)
+                r_img = self.session.get(
+                    src,
+                    timeout=20,
+                    headers={"Referer": source_url}
+                )
+                r_img.raise_for_status()
+                img_bytes = r_img.content
             except Exception as e:
-                logging.warning(f"[{self.cfg.name}] GUID={guid} image download failed ({src}): {e}")
+                logging.warning(
+                    f"[{self.cfg.name}] GUID={guid} image download failed ({src}): {e}"
+                )
                 continue
 
             filename = src.split("/")[-1].split("?")[0] or f"image_{idx}.jpg"
@@ -519,7 +587,17 @@ class WordPressClient:
 
     def create_post(self, item: PostItem) -> (bool, Optional[int], Optional[int]):
         logging.info(f"[{self.cfg.name}] Preparing post for GUID={item.guid}, TITLE={item.title!r}")
-        processed_html, featured_media_id = self._upload_and_rehost_images(item.content_html, item.guid)
+
+        # RSS categories -> WP categories ids
+        rss_cat_ids = self._ensure_categories(item.rss_categories)
+        # merge with default categories (and de-duplicate)
+        all_cat_ids = list({*(rss_cat_ids or []), *(self.cfg.default_categories or [])})
+
+        processed_html, featured_media_id = self._upload_and_rehost_images(
+            item.content_html,
+            item.guid,
+            item.url
+        )
 
         payload: Dict[str, Any] = {
             "title": item.title,
@@ -530,8 +608,9 @@ class WordPressClient:
         if item.published_at is not None:
             payload["date"] = item.published_at.isoformat()
 
-        if self.cfg.default_categories:
-            payload["categories"] = self.cfg.default_categories
+        if all_cat_ids:
+            payload["categories"] = all_cat_ids
+
         if self.cfg.default_tags:
             payload["tags"] = self.cfg.default_tags
 
@@ -548,7 +627,7 @@ class WordPressClient:
         api_url = self._posts_endpoint()
         logging.info(
             f"[{self.cfg.name}] Creating post via {api_url} | GUID={item.guid} | "
-            f"content_len={len(processed_html)}"
+            f"content_len={len(processed_html)} cats={all_cat_ids}"
         )
 
         try:
@@ -587,7 +666,6 @@ class AutoPoster:
         self.targets_cfg = [TargetConfig(**t) for t in raw["targets"]]
         self.runtime_cfg = RuntimeConfig(**raw["runtime"])
 
-        # allow config log level to override global if needed
         logging.getLogger().setLevel(
             getattr(logging, self.runtime_cfg.log_level.upper(), logging.INFO)
         )
@@ -604,7 +682,7 @@ class AutoPoster:
             logging.info(f"[INIT] Site '{t.name}' domain '{client.domain}' uses table '{table_name}'")
 
     def run_forever(self):
-        logging.info("=== WP Auto Poster (MySQL + Clean Content + Rehost Images) Started ===")
+        logging.info("=== WP Auto Poster (MySQL + Clean Content + Rehost Images + Categories) Started ===")
         while True:
             try:
                 self.single_cycle()
