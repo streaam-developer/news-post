@@ -183,6 +183,12 @@ class DB:
         cur.execute(f"SELECT 1 FROM `{table_name}` WHERE guid=%s", (guid,))
         return cur.fetchone() is not None
 
+    def get_site_post_id(self, table_name: str, guid: str) -> Optional[int]:
+        cur = self._cursor()
+        cur.execute(f"SELECT wp_post_id FROM `{table_name}` WHERE guid=%s", (guid,))
+        row = cur.fetchone()
+        return row[0] if row else None
+
     def mark_site_post(self, table_name: str, guid: str, wp_post_id: int):
         cur = self._cursor()
         logging.info(f"[DB] Marking GUID={guid} posted in {table_name} with WP ID={wp_post_id}")
@@ -527,6 +533,65 @@ class WordPressClient:
         )
         return False, None, r.status_code
 
+    def update_post(self, item: PostItem, wp_id: int) -> (bool, int, Optional[int]):
+        logging.info(f"[{self.cfg.name}] Updating post ID={wp_id} for GUID={item.guid}, TITLE={item.title!r}")
+        processed_html, featured_media_id = self._upload_and_rehost_images(item)
+
+        payload: Dict[str, Any] = {
+            "title": item.title,
+            "content": processed_html,
+            "status": self.cfg.default_status
+        }
+
+        if item.published_at is not None:
+            payload["date"] = item.published_at.isoformat()
+
+        categories = self.cfg.default_categories[:]
+        if item.category:
+            cat_id = self.get_category_id_by_name(item.category)
+            if cat_id:
+                categories.append(cat_id)
+        if categories:
+            payload["categories"] = categories
+
+        if self.cfg.default_tags:
+            payload["tags"] = self.cfg.default_tags
+
+        if featured_media_id:
+            payload["featured_media"] = featured_media_id
+
+        try:
+            slug = urlparse(item.url).path.strip("/").split("/")[-1]
+            if slug:
+                payload["slug"] = slug
+        except Exception:
+            pass
+
+        api_url = f"{self._posts_endpoint()}/{wp_id}"
+        logging.info(
+            f"[{self.cfg.name}] Updating post via {api_url} | GUID={item.guid} | "
+            f"content_len={len(processed_html)}"
+        )
+
+        try:
+            r = self.session.post(api_url, json=payload, timeout=60)  # Wait, POST or PUT?
+            # For update, it's PUT or PATCH, but WP REST API uses POST for update? No, for update it's PUT to /posts/{id}
+            # Actually, WP REST API supports both PUT and POST for update, but let's use PUT.
+            r = self.session.put(api_url, json=payload, timeout=60)
+        except Exception as e:
+            logging.error(f"[{self.cfg.name}] GUID={item.guid} post update error: {e}")
+            return False, wp_id, None
+
+        if r.status_code in (200, 201):
+            logging.info(f"[{self.cfg.name}] GUID={item.guid} post updated ID={wp_id}")
+            return True, wp_id, r.status_code
+
+        logging.error(
+            f"[{self.cfg.name}] GUID={item.guid} post update failed {r.status_code}. "
+            f"Response: {r.text[:500]}"
+        )
+        return False, wp_id, r.status_code
+
 
 # ------------- MAIN CONTROLLER -------------
 
@@ -592,7 +657,13 @@ class AutoPoster:
                 table_name = self.site_tables[client.domain]
 
                 if self.db.site_post_exists(table_name, item.guid):
-                    logging.info(f"[{client.cfg.name}] GUID={item.guid} already posted to this site, skipping.")
+                    existing_wp_id = self.db.get_site_post_id(table_name, item.guid)
+                    if existing_wp_id:
+                        logging.info(f"[{client.cfg.name}] GUID={item.guid} already posted, updating post ID={existing_wp_id}")
+                        success, wp_id, status_code = client.update_post(item, existing_wp_id)
+                        self.db.log_push(item.guid, client.cfg.name, wp_id, status_code, success)
+                    else:
+                        logging.warning(f"[{client.cfg.name}] GUID={item.guid} exists in DB but no WP ID found")
                     continue
 
                 success, wp_id, status_code = client.create_post(item)
