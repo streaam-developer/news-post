@@ -218,7 +218,7 @@ class SourceFetcher:
         logging.info(f"[SRC] RSS HTTP status: {resp.status_code}, length={len(resp.text)}")
 
         # Use html.parser to avoid xml parser dependency issues
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "xml")  # proper XML parser
         items = soup.find_all("item")
         logging.info(f"[SRC] RSS items found: {len(items)}")
 
