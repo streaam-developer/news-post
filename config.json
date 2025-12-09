@@ -1,9 +1,11 @@
 {
   "db": {
-    "host": "mysql.gb.stackcp.com:39319",
-    "user": "sites_posts-353037358285",
-    "password": "t4nkbjj3oi",
-    "database": "sites_posts-353037358285"
+  "host": "mysql.gb.stackcp.com",
+  "port": 39319,
+  "user": "sites_posts-353037358285",
+  "password": "t4nkbjj3oi",
+  "database": "sites_posts-353037358285"
+  
   },
 
   "source": {
