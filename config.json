@@ -27,23 +27,13 @@
       "default_categories": [],
       "default_tags": [],
       "post_type": "posts"
-    },
-    {
-      "name": "WP Site 2",
-      "base_url": "https://yourwp2.com",
-      "username": "apiuser2",
-      "application_password": "APP_PASSWORD_HERE",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
     }
   ],
 
   "runtime": {
     "poll_interval_seconds": 300,
     "user_agent": "WP-AutoPoster/2.0 (contact: you@example.com)",
-    "max_posts_per_cycle": 5,
+    "max_posts_per_cycle": 15,
     "log_level": "INFO"
   }
 }
