@@ -667,7 +667,7 @@ class AutoPoster:
         self.runtime_cfg = RuntimeConfig(**raw["runtime"])
 
         logging.getLogger().setLevel(
-            getattr(logging, self.runtime_cfg.log_level.upper(), logging.INFO)
+            getattr(logging, self.runtime_cfg.log_level.upper(), logging.WARNING)
         )
 
         self.fetchers = [SourceFetcher(cfg, self.runtime_cfg) for cfg in self.sources_cfg]

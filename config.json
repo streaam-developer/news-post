@@ -254,6 +254,6 @@
     "poll_interval_seconds": 300,
     "user_agent": "WP-AutoPoster/2.0 (contact: you@example.com)",
     "max_posts_per_cycle": 15,
-    "log_level": "INFO"
+    "log_level": "WARNING"
   }
 }
