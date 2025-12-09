@@ -20,9 +20,9 @@
   "targets": [
     {
       "name": "WP Site 1",
-      "base_url": "https://yourwp1.com",
-      "username": "apiuser1",
-      "application_password": "APP_PASSWORD_HERE",
+      "base_url": "https://zeb.monster",
+      "username": "tester",
+      "application_password": "wNN1 eYKS eIh5 avrA y8nw 5CLN",
       "default_status": "publish",
       "default_categories": [],
       "default_tags": [],
