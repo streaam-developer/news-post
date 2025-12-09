@@ -325,67 +325,67 @@ class SourceFetcher:
             logging.info(f"[SRC] RSS items found in {rss_url}: {len(items)}")
 
             for idx, it in enumerate(items):
-            guid_tag = it.find("guid")
-            link_tag = it.find("link")
-            title_tag = it.find("title")
-            date_tag = it.find("pubDate")
+                guid_tag = it.find("guid")
+                link_tag = it.find("link")
+                title_tag = it.find("title")
+                date_tag = it.find("pubDate")
 
-            # GUID
-            guid = None
-            if guid_tag:
-                txt = (guid_tag.text or "").strip()
-                if txt:
-                    guid = txt
+                # GUID
+                guid = None
+                if guid_tag:
+                    txt = (guid_tag.text or "").strip()
+                    if txt:
+                        guid = txt
 
-            # URL
-            url = None
-            if link_tag:
-                txt = (link_tag.text or "").strip()
-                if txt:
-                    url = txt
-                elif link_tag.has_attr("href"):
-                    url = link_tag["href"].strip()
+                # URL
+                url = None
+                if link_tag:
+                    txt = (link_tag.text or "").strip()
+                    if txt:
+                        url = txt
+                    elif link_tag.has_attr("href"):
+                        url = link_tag["href"].strip()
 
-            # Fallback: guid = url if guid missing
-            if not guid and url:
-                guid = url
+                # Fallback: guid = url if guid missing
+                if not guid and url:
+                    guid = url
 
-            title = title_tag.text.strip() if title_tag and title_tag.text else "(No title)"
+                title = title_tag.text.strip() if title_tag and title_tag.text else "(No title)"
 
-            # RSS categories (e.g. <category>business</category>)
-            rss_cats = []
-            for c in it.find_all("category"):
-                if c.text and c.text.strip():
-                    rss_cats.append(c.text.strip())
+                # RSS categories (e.g. <category>business</category>)
+                rss_cats = []
+                for c in it.find_all("category"):
+                    if c.text and c.text.strip():
+                        rss_cats.append(c.text.strip())
 
-            logging.info(f"[SRC] Item #{idx} GUID={guid} URL={url} TITLE={title} CATS={rss_cats}")
+                logging.info(f"[SRC] Item #{idx} GUID={guid} URL={url} TITLE={title} CATS={rss_cats}")
 
-            if not guid or not url:
-                logging.warning(f"[SRC] Skipping item #{idx} because GUID or URL missing")
-                continue
+                if not guid or not url:
+                    logging.warning(f"[SRC] Skipping item #{idx} because GUID or URL missing")
+                    continue
 
-            if db.has_source_post(guid):
-                logging.info(f"[SRC] GUID={guid} already in source_posts, skipping")
-                continue
+                if db.has_source_post(guid):
+                    logging.info(f"[SRC] GUID={guid} already in source_posts, skipping")
+                    continue
 
-            published_at = None
-            if date_tag and date_tag.text:
-                try:
-                    published_at = dateparser.parse(date_tag.text)
-                    if published_at.tzinfo is None:
-                        published_at = self.tz.localize(published_at)
-                except Exception as e:
-                    logging.warning(f"[SRC] Failed to parse date for GUID={guid}: {e}")
-                    published_at = None
+                published_at = None
+                if date_tag and date_tag.text:
+                    try:
+                        published_at = dateparser.parse(date_tag.text)
+                        if published_at.tzinfo is None:
+                            published_at = self.tz.localize(published_at)
+                    except Exception as e:
+                        logging.warning(f"[SRC] Failed to parse date for GUID={guid}: {e}")
+                        published_at = None
 
-            content_html = ""
-            if self.cfg.full_content_from_article_page:
-                content_html = self._fetch_article_content(url, guid)
-            else:
-                desc_tag = it.find("description")
-                content_html = desc_tag.text if desc_tag and desc_tag.text else ""
+                content_html = ""
+                if self.cfg.full_content_from_article_page:
+                    content_html = self._fetch_article_content(url, guid)
+                else:
+                    desc_tag = it.find("description")
+                    content_html = desc_tag.text if desc_tag and desc_tag.text else ""
 
-            logging.info(f"[SRC] GUID={guid} content length after extract: {len(content_html)}")
+                logging.info(f"[SRC] GUID={guid} content length after extract: {len(content_html)}")
 
                 item = PostItem(
                     guid=guid,
