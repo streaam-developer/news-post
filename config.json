@@ -1,6 +1,6 @@
 {
   "db": {
-    "host": "sdb-77.hosting.stackcp.net",
+    "host": "mysql.gb.stackcp.com:39319",
     "user": "sites_posts-353037358285",
     "password": "t4nkbjj3oi",
     "database": "sites_posts-353037358285"
