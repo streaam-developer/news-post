@@ -76,7 +76,7 @@ class DB:
         self._init_global_tables()
 
     def _connect(self):
-    return mysql.connector.connect(
+        return mysql.connector.connect(
         host=self.cfg.host,
         user=self.cfg.user,
         password=self.cfg.password,
