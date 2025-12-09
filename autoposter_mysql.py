@@ -360,6 +360,22 @@ class WordPressClient:
     def _categories_endpoint(self) -> str:
         return f"{self.cfg.base_url.rstrip('/')}/wp-json/wp/v2/categories"
 
+    def create_category(self, name: str) -> Optional[int]:
+        payload = {"name": name}
+        try:
+            r = self.session.post(self._categories_endpoint(), json=payload, timeout=20)
+            if r.status_code in (200, 201):
+                data = r.json()
+                cat_id = data.get("id")
+                logging.info(f"[{self.cfg.name}] Created category '{name}' with ID={cat_id}")
+                return cat_id
+            else:
+                logging.warning(f"[{self.cfg.name}] Failed to create category '{name}': {r.status_code} {r.text[:200]}")
+                return None
+        except Exception as e:
+            logging.warning(f"[{self.cfg.name}] Error creating category '{name}': {e}")
+            return None
+
     def get_category_id_by_name(self, name: str) -> Optional[int]:
         try:
             r = self.session.get(f"{self._categories_endpoint()}?search={name}", timeout=20)
@@ -368,9 +384,11 @@ class WordPressClient:
                 for cat in data:
                     if cat.get("name", "").lower() == name.lower():
                         return cat.get("id")
-            return None
+            # If not found, try to create
+            logging.info(f"[{self.cfg.name}] Category '{name}' not found, attempting to create")
+            return self.create_category(name)
         except Exception as e:
-            logging.warning(f"[{self.cfg.name}] Failed to get category ID for {name}: {e}")
+            logging.warning(f"[{self.cfg.name}] Failed to get/create category ID for {name}: {e}")
             return None
 
     def _guess_mime_from_url(self, url: str) -> str:
