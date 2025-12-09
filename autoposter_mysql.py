@@ -16,7 +16,19 @@ from dateutil import parser as dateparser
 import pytz
 import mysql.connector
 
+import json
+import logging
+import time
+...
+import mysql.connector
 
+# 👇 YE NAYA BLOCK ADD KARO:
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logging.info("=== Script starting (early log config set) ===")
 # ------------- DATA CLASSES -------------
 
 @dataclass
