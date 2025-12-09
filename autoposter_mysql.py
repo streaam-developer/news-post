@@ -25,6 +25,7 @@ class DBConfig:
     user: str
     password: str
     database: str
+    port: int = 3306
 
 
 @dataclass
@@ -75,12 +76,13 @@ class DB:
         self._init_global_tables()
 
     def _connect(self):
-        return mysql.connector.connect(
-            host=self.cfg.host,
-            user=self.cfg.user,
-            password=self.cfg.password,
-            database=self.cfg.database
-        )
+    return mysql.connector.connect(
+        host=self.cfg.host,
+        user=self.cfg.user,
+        password=self.cfg.password,
+        database=self.cfg.database,
+        port=self.cfg.port,
+    )
 
     def _cursor(self, dictionary=False):
         try:
