@@ -170,15 +170,28 @@ class DB:
         self.conn = self._connect()
         self._init_global_tables()
 
-    def _connect(self):
-        logging.info(f"[DB] Connecting to MySQL {self.cfg.host}:{self.cfg.port} db={self.cfg.database}")
-        return mysql.connector.connect(
-            host=self.cfg.host,
-            user=self.cfg.user,
-            password=self.cfg.password,
-            database=self.cfg.database,
-            port=self.cfg.port,
-        )
+    def _cursor(self, dictionary=False):
+        import mysql.connector
+        while True:
+        try:
+            # Connection object missing or disconnected => reconnect
+            if self.conn is None or not self.conn.is_connected():
+                logging.warning("[DB] Connection not available, reconnecting...")
+                self.conn = self._connect()
+
+            try:
+                return self.conn.cursor(dictionary=dictionary)
+            except mysql.connector.Error as e:
+                logging.warning(f"[DB] cursor() failed: {e}; reconnecting...")
+                self.conn = self._connect()
+                # loop continues and tries again
+
+        except mysql.connector.Error as e:
+            logging.error(f"[DB] MySQL error while getting cursor: {e}; reconnecting...")
+            self.conn = self._connect()
+        except Exception as e:
+            logging.error(f"[DB] Unexpected error while getting cursor: {e}; reconnecting...")
+            self.conn = self._connect()
 
     def _cursor(self, dictionary=False):
         try:
