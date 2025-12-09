@@ -1,0 +1,47 @@
+{
+  "db": {
+    "host": "sdb-77.hosting.stackcp.net",
+    "user": "sites_posts-353037358285",
+    "password": "t4nkbjj3oi",
+    "database": "sites_posts-353037358285"
+  },
+
+  "source": {
+    "mode": "rss",
+    "rss_url": "https://www.hindustantimes.com/feeds/rss/business/rssfeed.xml",
+    "full_content_from_article_page": true,
+    "article_content_selector": ".storyArea .storyDetail",
+    "title_selector": "h1",
+    "timezone": "Asia/Kolkata"
+  },
+
+  "targets": [
+    {
+      "name": "WP Site 1",
+      "base_url": "https://yourwp1.com",
+      "username": "apiuser1",
+      "application_password": "APP_PASSWORD_HERE",
+      "default_status": "publish",
+      "default_categories": [],
+      "default_tags": [],
+      "post_type": "posts"
+    },
+    {
+      "name": "WP Site 2",
+      "base_url": "https://yourwp2.com",
+      "username": "apiuser2",
+      "application_password": "APP_PASSWORD_HERE",
+      "default_status": "publish",
+      "default_categories": [],
+      "default_tags": [],
+      "post_type": "posts"
+    }
+  ],
+
+  "runtime": {
+    "poll_interval_seconds": 300,
+    "user_agent": "WP-AutoPoster/2.0 (contact: you@example.com)",
+    "max_posts_per_cycle": 5,
+    "log_level": "INFO"
+  }
+}
