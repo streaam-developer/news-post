@@ -25,7 +25,7 @@ class DBConfig:
     user: str
     password: str
     database: str
-    port: int = 3306
+    port: int = 3306  # ✅ port support
 
 
 @dataclass
@@ -76,17 +76,19 @@ class DB:
         self._init_global_tables()
 
     def _connect(self):
+        logging.info(f"[DB] Connecting to MySQL {self.cfg.host}:{self.cfg.port} db={self.cfg.database}")
         return mysql.connector.connect(
-        host=self.cfg.host,
-        user=self.cfg.user,
-        password=self.cfg.password,
-        database=self.cfg.database,
-        port=self.cfg.port,
-    )
+            host=self.cfg.host,
+            user=self.cfg.user,
+            password=self.cfg.password,
+            database=self.cfg.database,
+            port=self.cfg.port,
+        )
 
     def _cursor(self, dictionary=False):
         try:
             if not self.conn.is_connected():
+                logging.warning("[DB] Connection lost, reconnecting...")
                 self.conn.reconnect()
         except Exception:
             self.conn = self._connect()
@@ -94,7 +96,7 @@ class DB:
 
     def _init_global_tables(self):
         cur = self._cursor()
-        # Master table for source posts
+        logging.info("[DB] Ensuring source_posts & post_push_log tables exist...")
         cur.execute("""
         CREATE TABLE IF NOT EXISTS source_posts (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -105,7 +107,6 @@ class DB:
             scraped_at DATETIME DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
-        # Optional global log
         cur.execute("""
         CREATE TABLE IF NOT EXISTS post_push_log (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -121,7 +122,6 @@ class DB:
 
     @staticmethod
     def sanitize_table_name(domain: str) -> str:
-        # domain -> safe table name like wp_example_com_posts
         dom = domain.lower()
         dom = re.sub(r'[^a-z0-9]+', '_', dom)
         dom = dom.strip('_')
@@ -130,6 +130,7 @@ class DB:
     def ensure_site_table(self, domain: str) -> str:
         table_name = self.sanitize_table_name(domain)
         cur = self._cursor()
+        logging.info(f"[DB] Ensuring table for site {domain}: {table_name}")
         cur.execute(f"""
         CREATE TABLE IF NOT EXISTS `{table_name}` (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -150,6 +151,7 @@ class DB:
 
     def insert_source_post(self, item: PostItem):
         cur = self._cursor()
+        logging.info(f"[DB] Inserting source post GUID={item.guid}")
         cur.execute("""
             INSERT IGNORE INTO source_posts (guid, url, title, published_at)
             VALUES (%s, %s, %s, %s)
@@ -169,6 +171,7 @@ class DB:
 
     def mark_site_post(self, table_name: str, guid: str, wp_post_id: int):
         cur = self._cursor()
+        logging.info(f"[DB] Marking GUID={guid} posted in {table_name} with WP ID={wp_post_id}")
         cur.execute(
             f"INSERT IGNORE INTO `{table_name}` (guid, wp_post_id) VALUES (%s, %s)",
             (guid, wp_post_id)
@@ -178,6 +181,7 @@ class DB:
     def log_push(self, guid: str, target_name: str, wp_post_id: Optional[int],
                  status_code: Optional[int], success: bool):
         cur = self._cursor()
+        logging.info(f"[DB] Logging push guid={guid} target={target_name} success={success} status={status_code}")
         cur.execute("""
             INSERT INTO post_push_log (guid, target_name, wp_post_id, status_code, success)
             VALUES (%s, %s, %s, %s, %s)
@@ -203,32 +207,41 @@ class SourceFetcher:
             logging.error("Only RSS mode supported for now.")
             return []
 
-        logging.info(f"Fetching RSS: {self.cfg.rss_url}")
+        logging.info(f"[SRC] Fetching RSS: {self.cfg.rss_url}")
         try:
             resp = self.session.get(self.cfg.rss_url, timeout=20)
             resp.raise_for_status()
         except Exception as e:
-            logging.error(f"RSS fetch error: {e}")
+            logging.error(f"[SRC] RSS fetch error: {e}")
             return []
 
-        soup = BeautifulSoup(resp.text, "xml")
+        logging.info(f"[SRC] RSS HTTP status: {resp.status_code}, length={len(resp.text)}")
+
+        # Use html.parser to avoid xml parser dependency issues
+        soup = BeautifulSoup(resp.text, "html.parser")
         items = soup.find_all("item")
+        logging.info(f"[SRC] RSS items found: {len(items)}")
+
         new_posts: List[PostItem] = []
 
-        for it in items:
+        for idx, it in enumerate(items):
             guid_tag = it.find("guid")
             link_tag = it.find("link")
             title_tag = it.find("title")
             date_tag = it.find("pubDate")
 
-            guid = guid_tag.text.strip() if guid_tag else (link_tag.text.strip() if link_tag else None)
-            url = link_tag.text.strip() if link_tag else None
-            title = title_tag.text.strip() if title_tag else "(No title)"
+            guid = guid_tag.text.strip() if guid_tag and guid_tag.text else None
+            url = link_tag.text.strip() if link_tag and link_tag.text else None
+            title = title_tag.text.strip() if title_tag and title_tag.text else "(No title)"
+
+            logging.info(f"[SRC] Item #{idx} GUID={guid} URL={url} TITLE={title}")
 
             if not guid or not url:
+                logging.warning(f"[SRC] Skipping item #{idx} because GUID or URL missing")
                 continue
 
             if db.has_source_post(guid):
+                logging.info(f"[SRC] GUID={guid} already in source_posts, skipping")
                 continue
 
             published_at = None
@@ -237,15 +250,18 @@ class SourceFetcher:
                     published_at = dateparser.parse(date_tag.text)
                     if published_at.tzinfo is None:
                         published_at = self.tz.localize(published_at)
-                except Exception:
+                except Exception as e:
+                    logging.warning(f"[SRC] Failed to parse date for GUID={guid}: {e}")
                     published_at = None
 
-            # Prefer full content from article page
+            # Always fetch article page content if full_content_from_article_page = True
             if self.cfg.full_content_from_article_page:
-                content_html = self._fetch_article_content(url)
+                content_html = self._fetch_article_content(url, guid)
             else:
                 desc_tag = it.find("description")
-                content_html = desc_tag.text if desc_tag else ""
+                content_html = desc_tag.text if desc_tag and desc_tag.text else ""
+
+            logging.info(f"[SRC] GUID={guid} content length after extract: {len(content_html)}")
 
             item = PostItem(
                 guid=guid,
@@ -256,22 +272,28 @@ class SourceFetcher:
             )
             new_posts.append(item)
 
-        logging.info(f"New posts from source: {len(new_posts)}")
+        logging.info(f"[SRC] New posts collected this cycle: {len(new_posts)}")
         return new_posts
 
-    def _fetch_article_content(self, url: str) -> str:
-        logging.info(f"Fetching full article: {url}")
+    def _fetch_article_content(self, url: str, guid: str) -> str:
+        logging.info(f"[SRC] Fetching full article for GUID={guid}, URL={url}")
         try:
             resp = self.session.get(url, timeout=30)
             resp.raise_for_status()
         except Exception as e:
-            logging.error(f"Article fetch error: {e}")
+            logging.error(f"[SRC] Article fetch error for GUID={guid}, URL={url}: {e}")
             return ""
 
+        logging.info(f"[SRC] Article HTTP status={resp.status_code}, length={len(resp.text)}")
+
         soup = BeautifulSoup(resp.text, "html.parser")
+
+        # NOTE: we DO NOT change the class selector here. We use exactly what you put in config.
+        logging.info(f"[SRC] Using selector: {self.cfg.article_content_selector}")
         node = soup.select_one(self.cfg.article_content_selector)
+
         if not node:
-            logging.warning(f"Content selector not found for: {url}")
+            logging.warning(f"[SRC] Content selector NOT FOUND for GUID={guid}, URL={url}")
             return ""
 
         # Fix relative URLs (links + images)
@@ -281,7 +303,9 @@ class SourceFetcher:
             if tag.name in ("img", "source") and tag.has_attr("src"):
                 tag["src"] = urljoin(url, tag["src"])
 
-        return str(node)
+        html = str(node)
+        logging.info(f"[SRC] Extracted HTML length for GUID={guid}: {len(html)}")
+        return html
 
 
 # ------------- WORDPRESS CLIENT (REST + MEDIA) -------------
@@ -309,17 +333,14 @@ class WordPressClient:
             return "image/jpeg"
         return mime
 
-    def _upload_and_rehost_images(self, html: str) -> (str, Optional[int]):
-        """
-        Download all <img> src from source, upload to this WP site,
-        replace src in HTML with new URLs.
-        Return (new_html, first_media_id_to_use_as_featured).
-        """
+    def _upload_and_rehost_images(self, html: str, guid: str) -> (str, Optional[int]):
         if not html:
+            logging.info(f"[{self.cfg.name}] Empty HTML for GUID={guid}, skipping image rehost.")
             return html, None
 
         soup = BeautifulSoup(html, "html.parser")
         imgs = soup.find_all("img")
+        logging.info(f"[{self.cfg.name}] GUID={guid} images found in content: {len(imgs)}")
         if not imgs:
             return html, None
 
@@ -331,12 +352,12 @@ class WordPressClient:
                 continue
 
             try:
-                logging.info(f"[{self.cfg.name}] Downloading image: {src}")
+                logging.info(f"[{self.cfg.name}] GUID={guid} downloading image #{idx}: {src}")
                 img_resp = requests.get(src, timeout=20)
                 img_resp.raise_for_status()
                 img_bytes = img_resp.content
             except Exception as e:
-                logging.warning(f"[{self.cfg.name}] Image download failed ({src}): {e}")
+                logging.warning(f"[{self.cfg.name}] GUID={guid} image download failed ({src}): {e}")
                 continue
 
             filename = src.split("/")[-1].split("?")[0] or f"image_{idx}.jpg"
@@ -350,42 +371,47 @@ class WordPressClient:
             }
 
             try:
-                logging.info(f"[{self.cfg.name}] Uploading image to media library: {filename}")
+                logging.info(f"[{self.cfg.name}] GUID={guid} uploading image to media: {filename}")
                 r = self.session.post(
                     self._media_endpoint(),
                     files=files,
                     headers=headers,
-                    timeout=30
+                    timeout=40
                 )
             except Exception as e:
-                logging.error(f"[{self.cfg.name}] Media upload error: {e}")
+                logging.error(f"[{self.cfg.name}] GUID={guid} media upload error: {e}")
                 continue
 
             if r.status_code not in (200, 201):
-                logging.error(f"[{self.cfg.name}] Media upload failed ({r.status_code}): {r.text[:200]}")
+                logging.error(f"[{self.cfg.name}] GUID={guid} media upload failed {r.status_code}: {r.text[:300]}")
                 continue
 
             try:
                 data = r.json()
             except Exception:
-                logging.error(f"[{self.cfg.name}] Invalid JSON in media response")
+                logging.error(f"[{self.cfg.name}] GUID={guid} invalid JSON in media response")
                 continue
 
             new_url = data.get("source_url")
             media_id = data.get("id")
+            logging.info(f"[{self.cfg.name}] GUID={guid} media uploaded, id={media_id}, new_url={new_url}")
+
             if not new_url or not media_id:
-                logging.error(f"[{self.cfg.name}] Missing media data in response")
+                logging.error(f"[{self.cfg.name}] GUID={guid} missing media data in response")
                 continue
 
+            # ✅ Only SRC change, class wagaira ko touch nahi kar rahe
             img["src"] = new_url
             if featured_media_id is None:
                 featured_media_id = media_id
 
-        return str(soup), featured_media_id
+        final_html = str(soup)
+        logging.info(f"[{self.cfg.name}] GUID={guid} final HTML length after rehost: {len(final_html)}")
+        return final_html, featured_media_id
 
     def create_post(self, item: PostItem) -> (bool, Optional[int], Optional[int]):
-        # Rehost all images and get featured image media id
-        processed_html, featured_media_id = self._upload_and_rehost_images(item.content_html)
+        logging.info(f"[{self.cfg.name}] Preparing post for GUID={item.guid}, TITLE={item.title!r}")
+        processed_html, featured_media_id = self._upload_and_rehost_images(item.content_html, item.guid)
 
         payload: Dict[str, Any] = {
             "title": item.title,
@@ -404,7 +430,6 @@ class WordPressClient:
         if featured_media_id:
             payload["featured_media"] = featured_media_id
 
-        # Optional: slug from source URL
         try:
             slug = urlparse(item.url).path.strip("/").split("/")[-1]
             if slug:
@@ -413,12 +438,15 @@ class WordPressClient:
             pass
 
         api_url = self._posts_endpoint()
-        logging.info(f"[{self.cfg.name}] Creating post: {item.title!r}")
+        logging.info(
+            f"[{self.cfg.name}] Creating post via {api_url} | GUID={item.guid} | "
+            f"content_len={len(processed_html)}"
+        )
 
         try:
-            r = self.session.post(api_url, json=payload, timeout=40)
+            r = self.session.post(api_url, json=payload, timeout=60)
         except Exception as e:
-            logging.error(f"[{self.cfg.name}] Post create error: {e}")
+            logging.error(f"[{self.cfg.name}] GUID={item.guid} post create error: {e}")
             return False, None, None
 
         if r.status_code in (200, 201):
@@ -427,10 +455,13 @@ class WordPressClient:
             except Exception:
                 data = {}
             wp_id = data.get("id")
-            logging.info(f"[{self.cfg.name}] Created post ID {wp_id}")
+            logging.info(f"[{self.cfg.name}] GUID={item.guid} post created ID={wp_id}")
             return True, wp_id, r.status_code
 
-        logging.error(f"[{self.cfg.name}] Post create failed {r.status_code}: {r.text[:400]}")
+        logging.error(
+            f"[{self.cfg.name}] GUID={item.guid} post create failed {r.status_code}. "
+            f"Response: {r.text[:500]}"
+        )
         return False, None, r.status_code
 
 
@@ -458,13 +489,12 @@ class AutoPoster:
         self.clients: List[WordPressClient] = []
         self.site_tables: Dict[str, str] = {}
 
-        # Initialize WP clients and per-site tables
         for t in self.targets_cfg:
             client = WordPressClient(t, self.runtime_cfg)
             self.clients.append(client)
             table_name = self.db.ensure_site_table(client.domain)
             self.site_tables[client.domain] = table_name
-            logging.info(f"Site '{t.name}' domain '{client.domain}' uses table '{table_name}'")
+            logging.info(f"[INIT] Site '{t.name}' domain '{client.domain}' uses table '{table_name}'")
 
     def run_forever(self):
         logging.info("=== WP Auto Poster (MySQL + Rehost Images) Started ===")
@@ -482,34 +512,31 @@ class AutoPoster:
             time.sleep(self.runtime_cfg.poll_interval_seconds)
 
     def single_cycle(self):
-        logging.info("Starting new cycle...")
+        logging.info("----- NEW CYCLE -----")
         new_items = self.fetcher.fetch_new(self.db)
         if not new_items:
-            logging.info("No new posts in source feed.")
+            logging.info("[CYCLE] No new posts in source feed.")
             return
 
-        # Limit per cycle
+        logging.info(f"[CYCLE] Items to process (after source dedup): {len(new_items)}")
         new_items = new_items[: self.runtime_cfg.max_posts_per_cycle]
 
         for item in new_items:
-            logging.info(f"Processing GUID={item.guid} TITLE={item.title!r}")
-
-            # Insert into source_posts (mark that we have seen this guid)
+            logging.info(f"[CYCLE] Processing GUID={item.guid}, TITLE={item.title!r}")
             self.db.insert_source_post(item)
 
             for client in self.clients:
                 table_name = self.site_tables[client.domain]
 
-                # If already posted to this specific site, skip
                 if self.db.site_post_exists(table_name, item.guid):
-                    logging.info(f"[{client.cfg.name}] GUID already posted to this site, skipping.")
+                    logging.info(f"[{client.cfg.name}] GUID={item.guid} already posted to this site, skipping.")
                     continue
 
                 success, wp_id, status_code = client.create_post(item)
                 self.db.log_push(item.guid, client.cfg.name, wp_id, status_code, success)
 
                 if success and wp_id:
-                    self.db.mark_site_post(table_name, item.guid, wp_id)
+                    self.db.mark_site_post(table_name, item.guid, wp_post_id=wp_id)
 
 
 if __name__ == "__main__":
