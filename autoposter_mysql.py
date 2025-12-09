@@ -19,11 +19,11 @@ import mysql.connector
 
 # ---------- GLOBAL LOGGING ----------
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,  # Changed to WARNING to reduce verbosity, only show errors and warnings
     format="[%(asctime)s] [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-logging.info("=== AutoPoster script starting ===")
+logging.warning("=== AutoPoster script starting ===")
 
 
 # ---------- CLEAN ARTICLE EXTRACTOR ----------
@@ -724,6 +724,9 @@ class AutoPoster:
 
                 if success and wp_id:
                     self.db.mark_site_post(table_name, item.guid, wp_post_id=wp_id)
+                    logging.warning(f"[SUCCESS] Posted '{item.title}' to {client.cfg.name} (WP ID: {wp_id})")
+                else:
+                    logging.error(f"[ERROR] Failed to post '{item.title}' to {client.cfg.name} (Status: {status_code})")
 
 
 if __name__ == "__main__":
