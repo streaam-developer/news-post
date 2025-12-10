@@ -251,6 +251,13 @@ class DB:
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS domain_rss_mapping (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            domain VARCHAR(255) NOT NULL UNIQUE,
+            rss_url TEXT NOT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        """)
         self.conn.commit()
 
     @staticmethod
@@ -293,6 +300,17 @@ class DB:
             item.title,
             item.published_at.strftime("%Y-%m-%d %H:%M:%S") if item.published_at else None
         ))
+        self.conn.commit()
+
+    def get_rss_for_domain(self, domain: str) -> Optional[str]:
+        cur = self._cursor(dictionary=True)
+        cur.execute("SELECT rss_url FROM domain_rss_mapping WHERE domain=%s", (domain,))
+        row = cur.fetchone()
+        return row['rss_url'] if row else None
+
+    def set_rss_for_domain(self, domain: str, rss_url: str):
+        cur = self._cursor()
+        cur.execute("INSERT INTO domain_rss_mapping (domain, rss_url) VALUES (%s, %s) ON DUPLICATE KEY UPDATE rss_url=%s", (domain, rss_url, rss_url))
         self.conn.commit()
 
     def site_post_exists(self, table_name: str, guid: str) -> bool:
@@ -715,6 +733,7 @@ class AutoPoster:
         self.fetchers = [SourceFetcher(cfg, self.runtime_cfg) for cfg in self.sources_cfg]
         self.clients: List[WordPressClient] = []
         self.site_tables: Dict[str, str] = {}
+        self.domain_rss: Dict[str, str] = {}
 
         for t in self.targets_cfg:
             client = WordPressClient(t, self.runtime_cfg)
@@ -722,6 +741,21 @@ class AutoPoster:
             table_name = self.db.ensure_site_table(client.domain)
             self.site_tables[client.domain] = table_name
             logging.debug(f"[INIT] Site '{t.name}' domain '{client.domain}' uses table '{table_name}'")
+
+            # Assign RSS to domain if not already set
+            existing_rss = self.db.get_rss_for_domain(client.domain)
+            if existing_rss:
+                self.domain_rss[client.domain] = existing_rss
+                logging.debug(f"[INIT] Domain '{client.domain}' already has RSS: {existing_rss}")
+            else:
+                # Assign the first available RSS from sources
+                available_rss = self.sources_cfg[0].rss_url if self.sources_cfg else []
+                if available_rss:
+                    assigned_rss = available_rss[0]  # Take first RSS
+                    self.db.set_rss_for_domain(client.domain, assigned_rss)
+                    self.domain_rss[client.domain] = assigned_rss
+                    logging.info(f"[INIT] Assigned RSS '{assigned_rss}' to domain '{client.domain}'")
+                else:
 
     def run_forever(self, dry_run: bool = False, limit_feeds: Optional[int] = None):
         logging.info("=== WP AutoPoster (fixed) Started ===")
@@ -740,29 +774,45 @@ class AutoPoster:
 
     def single_cycle(self, dry_run: bool = False, limit_feeds: Optional[int] = None):
         logging.info("----- NEW CYCLE -----")
-        new_items: List[PostItem] = []
-        for fetcher in self.fetchers:
+
+        for client in self.clients:
+            domain = client.domain
+            rss_url = self.domain_rss.get(domain)
+            if not rss_url:
+                logging.warning(f"[CYCLE] No RSS assigned to domain '{domain}', skipping.")
+                continue
+
+            # Create a temporary source config for this domain's RSS
+            source_cfg = SourceConfig(
+                mode="rss",
+                rss_url=[rss_url],  # Keep as list for compatibility
+                full_content_from_article_page=self.sources_cfg[0].full_content_from_article_page if self.sources_cfg else False,
+                article_content_selector=self.sources_cfg[0].article_content_selector if self.sources_cfg else None,
+                title_selector=self.sources_cfg[0].title_selector if self.sources_cfg else None,
+                timezone=self.sources_cfg[0].timezone if self.sources_cfg else "UTC"
+            )
+            fetcher = SourceFetcher(source_cfg, self.runtime_cfg)
+
             try:
-                fetched = fetcher.fetch_new(self.db, limit_feeds=limit_feeds)
-                new_items.extend(fetched)
+                new_items = fetcher.fetch_new(self.db, limit_feeds=limit_feeds)
             except Exception as e:
-                logging.error(f"[CYCLE] Error while fetching source: {e}")
+                logging.error(f"[CYCLE] Error while fetching for domain '{domain}': {e}")
                 traceback.print_exc()
+                continue
 
-        if not new_items:
-            logging.info("[CYCLE] No new posts in source feeds.")
-            return
+            if not new_items:
+                logging.info(f"[CYCLE] No new posts for domain '{domain}'.")
+                continue
 
-        logging.info(f"[CYCLE] Items to process (after source dedup): {len(new_items)}")
-        new_items = new_items[: self.runtime_cfg.max_posts_per_cycle]
+            logging.info(f"[CYCLE] Domain '{domain}': {len(new_items)} new items")
+            new_items = new_items[: self.runtime_cfg.max_posts_per_cycle]
 
-        for item in new_items:
-            try:
-                logging.info(f"[CYCLE] Processing GUID={item.guid}, TITLE={item.title!r}")
-                self.db.insert_source_post(item)
+            for item in new_items:
+                try:
+                    logging.info(f"[CYCLE] Processing GUID={item.guid}, TITLE={item.title!r} for domain '{domain}'")
+                    self.db.insert_source_post(item)
 
-                for client in self.clients:
-                    table_name = self.site_tables[client.domain]
+                    table_name = self.site_tables[domain]
 
                     if self.db.site_post_exists(table_name, item.guid):
                         logging.info(f"[{client.cfg.name}] GUID={item.guid} already posted to this site, skipping.")
@@ -778,9 +828,9 @@ class AutoPoster:
                         logging.info(f"[INFO] (dry-run or no wp_id) Processed '{item.title}' for {client.cfg.name}")
                     else:
                         logging.error(f"[ERROR] Failed to post '{item.title}' to {client.cfg.name} (Status: {status_code})")
-            except Exception as e:
-                logging.error(f"[CYCLE] Exception while processing item GUID={item.guid}: {e}")
-                traceback.print_exc()
+                except Exception as e:
+                    logging.error(f"[CYCLE] Exception while processing item GUID={item.guid} for domain '{domain}': {e}")
+                    traceback.print_exc()
 
 
 # ----------------- CLI -----------------
