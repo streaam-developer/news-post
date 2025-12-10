@@ -756,6 +756,7 @@ class AutoPoster:
                     self.domain_rss[client.domain] = assigned_rss
                     logging.info(f"[INIT] Assigned RSS '{assigned_rss}' to domain '{client.domain}'")
                 else:
+                    logging.warning(f"[INIT] No RSS available to assign to domain '{client.domain}'")
 
     def run_forever(self, dry_run: bool = False, limit_feeds: Optional[int] = None):
         logging.info("=== WP AutoPoster (fixed) Started ===")
