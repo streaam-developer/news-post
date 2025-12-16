@@ -22,6 +22,7 @@ from urllib.parse import urljoin, urlparse
 import mimetypes
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -174,6 +175,7 @@ class RuntimeConfig:
     user_agent: str
     max_posts_per_cycle: int
     log_level: str
+    max_workers: int = 10
 
 
 @dataclass
@@ -723,7 +725,7 @@ class AutoPoster:
         logging.getLogger().setLevel(lvl)
         logging.debug(f"[INIT] Logging set to {logging.getLevelName(lvl)}")
 
-        db_cfg = DBConfig(**raw["db"])
+        self.db_cfg = db_cfg
         self.db = DB(db_cfg)
 
         # support older config shapes (single source/target)
@@ -740,9 +742,12 @@ class AutoPoster:
         for t in self.targets_cfg:
             client = WordPressClient(t, self.runtime_cfg)
             self.clients.append(client)
-            table_name = self.db.ensure_site_table(client.domain)
+            # Per-site tables are now created inside the threaded _process_client
+            # to ensure thread-safety for initial table creation.
+            # We still need to sanitize the name here for the site_tables dict.
+            table_name = self.db.sanitize_table_name(client.domain)
             self.site_tables[client.domain] = table_name
-            logging.debug(f"[INIT] Site '{t.name}' domain '{client.domain}' uses table '{table_name}'")
+            logging.debug(f"[INIT] Site '{t.name}' domain '{client.domain}' will use table '{table_name}'")
 
             # Assign RSS to domain if not already set
             existing_rss = self.db.get_rss_for_domain(client.domain)
@@ -777,63 +782,85 @@ class AutoPoster:
 
     def single_cycle(self, dry_run: bool = False, limit_feeds: Optional[int] = None):
         logging.info("----- NEW CYCLE -----")
+        
+        max_workers = self.runtime_cfg.max_workers
+        logging.info(f"[CYCLE] Starting parallel processing with up to {max_workers} workers.")
 
-        for client in self.clients:
-            domain = client.domain
-            rss_url = self.domain_rss.get(domain)
-            if not rss_url:
-                logging.warning(f"[CYCLE] No RSS assigned to domain '{domain}', skipping.")
-                continue
-
-            # Create a temporary source config for this domain's RSS
-            source_cfg = SourceConfig(
-                mode="rss",
-                rss_url=[rss_url],  # Keep as list for compatibility
-                full_content_from_article_page=self.sources_cfg[0].full_content_from_article_page if self.sources_cfg else False,
-                article_content_selector=self.sources_cfg[0].article_content_selector if self.sources_cfg else None,
-                title_selector=self.sources_cfg[0].title_selector if self.sources_cfg else None,
-                timezone=self.sources_cfg[0].timezone if self.sources_cfg else "UTC"
-            )
-            fetcher = SourceFetcher(source_cfg, self.runtime_cfg)
-
-            try:
-                new_items = fetcher.fetch_new(self.db, limit_feeds=limit_feeds)
-            except Exception as e:
-                logging.error(f"[CYCLE] Error while fetching for domain '{domain}': {e}")
-                traceback.print_exc()
-                continue
-
-            if not new_items:
-                logging.info(f"[CYCLE] No new posts for domain '{domain}'.")
-                continue
-
-            logging.info(f"[CYCLE] Domain '{domain}': {len(new_items)} new items")
-            new_items = new_items[: self.runtime_cfg.max_posts_per_cycle]
-
-            for item in new_items:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit tasks for each client to the executor
+            futures = [executor.submit(self._process_client, client, dry_run, limit_feeds) for client in self.clients]
+            
+            # Wait for all futures to complete
+            for future in futures:
                 try:
-                    logging.info(f"[CYCLE] Processing GUID={item.guid}, TITLE={item.title!r} for domain '{domain}'")
-                    self.db.insert_source_post(item)
-
-                    table_name = self.site_tables[domain]
-
-                    if self.db.site_post_exists(table_name, item.guid):
-                        logging.info(f"[{client.cfg.name}] GUID={item.guid} already posted to this site, skipping.")
-                        continue
-
-                    success, wp_id, status_code = client.create_post(item, dry_run=dry_run)
-                    self.db.log_push(item.guid, client.cfg.name, wp_id, status_code, success)
-
-                    if success and wp_id:
-                        self.db.mark_site_post(table_name, item.guid, wp_post_id=wp_id)
-                        logging.info(f"[SUCCESS] Posted '{item.title}' to {client.cfg.name} (WP ID: {wp_id})")
-                    elif success and wp_id is None:
-                        logging.info(f"[INFO] (dry-run or no wp_id) Processed '{item.title}' for {client.cfg.name}")
-                    else:
-                        logging.error(f"[ERROR] Failed to post '{item.title}' to {client.cfg.name} (Status: {status_code})")
+                    # Getting the result will re-raise any exception that occurred in the thread
+                    future.result()
                 except Exception as e:
-                    logging.error(f"[CYCLE] Exception while processing item GUID={item.guid} for domain '{domain}': {e}")
+                    logging.error(f"[CYCLE] A thread raised an exception: {e}")
                     traceback.print_exc()
+
+    def _process_client(self, client: WordPressClient, dry_run: bool = False, limit_feeds: Optional[int] = None):
+        # Each thread gets its own DB connection
+        db = DB(self.db_cfg)
+
+        domain = client.domain
+        
+        # Ensure site-specific table exists (thread-safe operation)
+        table_name = db.ensure_site_table(domain)
+        self.site_tables[domain] = table_name
+
+        rss_url = self.domain_rss.get(domain)
+        if not rss_url:
+            logging.warning(f"[{client.cfg.name}] No RSS assigned to domain '{domain}', skipping.")
+            return
+
+        source_cfg = SourceConfig(
+            mode="rss",
+            rss_url=[rss_url],
+            full_content_from_article_page=self.sources_cfg[0].full_content_from_article_page if self.sources_cfg else False,
+            article_content_selector=self.sources_cfg[0].article_content_selector if self.sources_cfg else None,
+            title_selector=self.sources_cfg[0].title_selector if self.sources_cfg else None,
+            timezone=self.sources_cfg[0].timezone if self.sources_cfg else "UTC"
+        )
+        fetcher = SourceFetcher(source_cfg, self.runtime_cfg)
+
+        try:
+            new_items = fetcher.fetch_new(db, limit_feeds=limit_feeds)
+        except Exception as e:
+            logging.error(f"[{client.cfg.name}] Error while fetching for domain '{domain}': {e}")
+            traceback.print_exc()
+            return
+
+        if not new_items:
+            logging.info(f"[{client.cfg.name}] No new posts for domain '{domain}'.")
+            return
+
+        logging.info(f"[{client.cfg.name}] Domain '{domain}': {len(new_items)} new items")
+        new_items = new_items[:self.runtime_cfg.max_posts_per_cycle]
+
+        for item in new_items:
+            try:
+                logging.info(f"[{client.cfg.name}] Processing GUID={item.guid}, TITLE={item.title!r}")
+                db.insert_source_post(item)
+
+                if db.site_post_exists(table_name, item.guid):
+                    logging.info(f"[{client.cfg.name}] GUID={item.guid} already posted to this site, skipping.")
+                    continue
+
+                success, wp_id, status_code = client.create_post(item, dry_run=dry_run)
+                db.log_push(item.guid, client.cfg.name, wp_id, status_code, success)
+
+                if success and wp_id:
+                    db.mark_site_post(table_name, item.guid, wp_post_id=wp_id)
+                    logging.info(f"[SUCCESS] Posted '{item.title}' to {client.cfg.name} (WP ID: {wp_id})")
+                elif success and wp_id is None:
+                    logging.info(f"[INFO] (dry-run or no wp_id) Processed '{item.title}' for {client.cfg.name}")
+                else:
+                    logging.error(f"[ERROR] Failed to post '{item.title}' to {client.cfg.name} (Status: {status_code})")
+            except Exception as e:
+                logging.error(f"[{client.cfg.name}] Exception while processing item GUID={item.guid}: {e}")
+                traceback.print_exc()
+
 
 
 # ----------------- CLI -----------------
