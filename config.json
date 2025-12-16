@@ -328,7 +328,8 @@
     "poll_interval_seconds": 12000,
     "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
     "max_posts_per_cycle": 10,
-    "log_level": "WARNING",
-    "max_workers": 10
+    "log_level": "INFO",
+    "max_workers": 10,
+    "max_retries": 0
   }
 }

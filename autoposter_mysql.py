@@ -176,6 +176,7 @@ class RuntimeConfig:
     max_posts_per_cycle: int
     log_level: str
     max_workers: int = 10
+    max_retries: int = 3
 
 
 @dataclass
@@ -346,7 +347,7 @@ class SourceFetcher:
         self.cfg = cfg
         self.runtime = runtime
         ua = runtime.user_agent or DEFAULT_USER_AGENT
-        self.session = build_session(ua)
+        self.session = build_session(ua, max_retries=runtime.max_retries)
         try:
             self.tz = pytz.timezone(cfg.timezone)
         except Exception:
@@ -491,7 +492,7 @@ class WordPressClient:
         self.cfg = cfg
         self.runtime = runtime
         ua = runtime.user_agent or DEFAULT_USER_AGENT
-        self.session = build_session(ua)
+        self.session = build_session(ua, max_retries=runtime.max_retries)
         self.session.auth = (cfg.username, cfg.application_password)
         parsed = urlparse(self.cfg.base_url)
         self.domain = parsed.netloc.split(":")[0]
