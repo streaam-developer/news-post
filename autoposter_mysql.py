@@ -725,6 +725,7 @@ class AutoPoster:
         logging.getLogger().setLevel(lvl)
         logging.debug(f"[INIT] Logging set to {logging.getLevelName(lvl)}")
 
+        db_cfg = DBConfig(**raw["db"])
         self.db_cfg = db_cfg
         self.db = DB(db_cfg)
 
