@@ -240,9 +240,16 @@ class DB:
             url TEXT,
             title TEXT,
             published_at DATETIME,
+            categories TEXT,
             scraped_at DATETIME DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
+        # Add categories column if it doesn't exist (for existing tables)
+        try:
+            cur.execute("ALTER TABLE source_posts ADD COLUMN categories TEXT")
+        except mysql.connector.Error as e:
+            if e.errno != 1060:  # Duplicate column name
+                logging.warning(f"[DB] Could not add categories column: {e}")
         cur.execute("""
         CREATE TABLE IF NOT EXISTS post_push_log (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -295,13 +302,14 @@ class DB:
         cur = self._cursor()
         logging.debug(f"[DB] Inserting source post GUID={item.guid}")
         cur.execute("""
-            INSERT IGNORE INTO source_posts (guid, url, title, published_at)
-            VALUES (%s, %s, %s, %s)
+            INSERT IGNORE INTO source_posts (guid, url, title, published_at, categories)
+            VALUES (%s, %s, %s, %s, %s)
         """, (
             item.guid,
             item.url,
             item.title,
-            item.published_at.strftime("%Y-%m-%d %H:%M:%S") if item.published_at else None
+            item.published_at.strftime("%Y-%m-%d %H:%M:%S") if item.published_at else None,
+            json.dumps(item.rss_categories)
         ))
         self.conn.commit()
 
@@ -315,6 +323,20 @@ class DB:
         cur = self._cursor()
         cur.execute("INSERT INTO domain_rss_mapping (domain, rss_url) VALUES (%s, %s) ON DUPLICATE KEY UPDATE rss_url=%s", (domain, rss_url, rss_url))
         self.conn.commit()
+
+    def get_all_source_posts(self) -> List[Dict[str, Any]]:
+        cur = self._cursor(dictionary=True)
+        cur.execute("SELECT guid, url, title, published_at, categories FROM source_posts")
+        rows = cur.fetchall()
+        for row in rows:
+            if row['categories']:
+                try:
+                    row['categories'] = json.loads(row['categories'])
+                except json.JSONDecodeError:
+                    row['categories'] = []
+            else:
+                row['categories'] = []
+        return rows
 
     def site_post_exists(self, table_name: str, guid: str) -> bool:
         cur = self._cursor()
@@ -835,33 +857,62 @@ class AutoPoster:
 
         if not new_items:
             logging.info(f"[{client.cfg.name}] No new posts for domain '{domain}'.")
-            return
+        else:
+            logging.info(f"[{client.cfg.name}] Domain '{domain}': {len(new_items)} new items")
+            new_items = new_items[:self.runtime_cfg.max_posts_per_cycle]
 
-        logging.info(f"[{client.cfg.name}] Domain '{domain}': {len(new_items)} new items")
-        new_items = new_items[:self.runtime_cfg.max_posts_per_cycle]
+            for item in new_items:
+                try:
+                    logging.info(f"[{client.cfg.name}] Processing GUID={item.guid}, TITLE={item.title!r}")
+                    db.insert_source_post(item)
 
-        for item in new_items:
-            try:
-                logging.info(f"[{client.cfg.name}] Processing GUID={item.guid}, TITLE={item.title!r}")
-                db.insert_source_post(item)
+                    if db.site_post_exists(table_name, item.guid):
+                        logging.info(f"[{client.cfg.name}] GUID={item.guid} already posted to this site, skipping.")
+                        continue
 
-                if db.site_post_exists(table_name, item.guid):
-                    logging.info(f"[{client.cfg.name}] GUID={item.guid} already posted to this site, skipping.")
-                    continue
+                    success, wp_id, status_code = client.create_post(item, dry_run=dry_run)
+                    db.log_push(item.guid, client.cfg.name, wp_id, status_code, success)
 
-                success, wp_id, status_code = client.create_post(item, dry_run=dry_run)
-                db.log_push(item.guid, client.cfg.name, wp_id, status_code, success)
+                    if success and wp_id:
+                        db.mark_site_post(table_name, item.guid, wp_post_id=wp_id)
+                        logging.info(f"[SUCCESS] Posted '{item.title}' to {client.cfg.name} (WP ID: {wp_id})")
+                    elif success and wp_id is None:
+                        logging.info(f"[INFO] (dry-run or no wp_id) Processed '{item.title}' for {client.cfg.name}")
+                    else:
+                        logging.error(f"[ERROR] Failed to post '{item.title}' to {client.cfg.name} (Status: {status_code})")
+                except Exception as e:
+                    logging.error(f"[{client.cfg.name}] Exception while processing item GUID={item.guid}: {e}")
+                    traceback.print_exc()
 
-                if success and wp_id:
-                    db.mark_site_post(table_name, item.guid, wp_post_id=wp_id)
-                    logging.info(f"[SUCCESS] Posted '{item.title}' to {client.cfg.name} (WP ID: {wp_id})")
-                elif success and wp_id is None:
-                    logging.info(f"[INFO] (dry-run or no wp_id) Processed '{item.title}' for {client.cfg.name}")
-                else:
-                    logging.error(f"[ERROR] Failed to post '{item.title}' to {client.cfg.name} (Status: {status_code})")
-            except Exception as e:
-                logging.error(f"[{client.cfg.name}] Exception while processing item GUID={item.guid}: {e}")
-                traceback.print_exc()
+        # Sync all posts from source_posts table
+        logging.info(f"[{client.cfg.name}] Starting synchronization of all posts from source_posts table.")
+        all_source_posts = db.get_all_source_posts()
+        for post_data in all_source_posts:
+            guid = post_data['guid']
+            if not db.site_post_exists(table_name, guid):
+                logging.info(f"[{client.cfg.name}] Missing post with GUID={guid} on this site. Uploading.")
+                try:
+                    content_html = fetcher._fetch_article_content(post_data['url'], guid)
+                    if content_html:
+                        item = PostItem(
+                            guid=guid,
+                            url=post_data['url'],
+                            title=post_data['title'],
+                            content_html=content_html,
+                            published_at=post_data['published_at'],
+                            rss_categories=post_data['categories']
+                        )
+                        success, wp_id, status_code = client.create_post(item, dry_run=dry_run)
+                        db.log_push(guid, client.cfg.name, wp_id, status_code, success)
+
+                        if success and wp_id:
+                            db.mark_site_post(table_name, guid, wp_post_id=wp_id)
+                            logging.info(f"[SUCCESS] Synced '{item.title}' to {client.cfg.name} (WP ID: {wp_id})")
+                        else:
+                            logging.error(f"[ERROR] Failed to sync '{item.title}' to {client.cfg.name} (Status: {status_code})")
+                except Exception as e:
+                    logging.error(f"[{client.cfg.name}] Exception while syncing item GUID={guid}: {e}")
+                    traceback.print_exc()
 
 
 
