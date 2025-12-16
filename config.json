@@ -38,6 +38,16 @@
       "default_categories": [],
       "default_tags": [],
       "post_type": "posts"
+    },
+    {
+      "name": "WP Site 27 - technewsworld.in",
+      "base_url": "https://subhadralist.org.in",
+      "username": "admin",
+      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
+      "default_status": "publish",
+      "default_categories": [],
+      "default_tags": [],
+      "post_type": "posts"
     }
   ],
   "runtime": {
