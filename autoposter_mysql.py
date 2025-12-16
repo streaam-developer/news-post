@@ -630,6 +630,8 @@ class WordPressClient:
             img["src"] = new_url
             if featured_media_id is None:
                 featured_media_id = media_id
+            
+            time.sleep(1)
 
         final_html = str(soup)
         logging.debug(f"[{self.cfg.name}] GUID={guid} final HTML length after rehost: {len(final_html)}")

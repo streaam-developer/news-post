@@ -12,9 +12,7 @@
     {
       "mode": "rss",
       "rss_url": [
-        "https://www.hindustantimes.com/feeds/rss/lifestyle/health/rssfeed.xml",
-        "https://www.hindustantimes.com/feeds/rss/education/admissions/rssfeed.xml",
-        "https://www.hindustantimes.com/feeds/rss/infographic/startups/rssfeed.xml"
+        "https://www.hindustantimes.com/feeds/rss/business/rssfeed.xml"
       ],
       "full_content_from_article_page": true,
       "article_content_selector": "div.articleDetail_artContent__F_8dX",
