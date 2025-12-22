@@ -9,7 +9,7 @@
     "sources": [
       {
         "username": "admin",
-        "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
+        "application_password": "ybgZ tg8m aAbE 3Np5 GG8K lpuS",
         "default_status": "publish",
         "default_categories": [],
         "default_tags": [],
@@ -19,22 +19,6 @@
             "name": "niveshskill.com",
             "base_url": "https://niveshskill.com",
             "rss_url": "https://indianexpress.com/section/cities/ahmedabad/feed/",
-            "title_selector": "",
-            "content_selector": "",
-            "time_selector": ""
-          },
-          {
-            "name": "WP Site 4 - mdseotools.com",
-            "base_url": "https://mdseotools.com",
-            "rss_url": "https://indianexpress.com/section/cities/amritsar/feed/",
-            "title_selector": "",
-            "content_selector": "",
-            "time_selector": ""
-          },
-          {
-            "name": "Art And Culture",
-            "base_url": ["https://artandculturesite.com", "https://test.com"],
-            "rss_url": "https://indianexpress.com/section/lifestyle/art-and-culture/feed/",
             "title_selector": "",
             "content_selector": "",
             "time_selector": ""
