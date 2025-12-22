@@ -19,7 +19,7 @@
             
   "title_selector": "h1.arttitle",
   "content_selector": "div.content",
-  "time_selector": "meta[property='article:published_time'], meta[property='article:modified_time'], .publis-date"
+  "time_selector": "meta[property='article:published_time'], meta[property='article:modified_time'], .publis-date",
 
 
             "featured_image_selector": "img[itemprop='image'], .featured-image img"
