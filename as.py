@@ -49,13 +49,11 @@ class TargetConfig:
 
 @dataclass
 class RuntimeConfig:
+    max_posts_per_cycle: int              # 👈 non-default FIRST
     poll_interval_seconds: int = 600
     max_workers: int = 5
     log_level: str = "INFO"
-    max_posts_per_cycle: int
     user_agent: str = "Mozilla/5.0"
-
-
 
 @dataclass
 class PostItem:
