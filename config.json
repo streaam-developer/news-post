@@ -18,10 +18,11 @@
           {
             "name": "niveshskill.com",
             "base_url": "https://niveshskill.com",
-            "rss_url": "https://indianexpress.com/section/cities/ahmedabad/feed/",
+            "rss_url": "https://indianexpress.com/section/entertainment/feed/",
             "title_selector": "h1.native_story_title",
-  "content_selector": "article.post .entry-content",
-  "time_selector": "span[itemprop='dateModified'], span[itemprop='datePublished'], .date"
+            "content_selector": "article.post .entry-content",
+            "time_selector": "span[itemprop='dateModified'], span[itemprop='datePublished'], .date",
+            "featured_image_selector": "img[itemprop='image'], .featured-image img"
 
 
           }

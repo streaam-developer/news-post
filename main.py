@@ -6,6 +6,7 @@ import requests
 from bs4 import BeautifulSoup
 from apscheduler.schedulers.background import BackgroundScheduler
 import logging
+from urllib.parse import urljoin
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -97,6 +98,40 @@ def extract_element(soup, selector):
     element = soup.select_one(selector)
     return element.get_text(strip=True) if element else None
 
+def extract_image_url(soup, selector, base_url):
+    """Safely extracts image URL from an element using a CSS selector."""
+    if not selector:
+        return None
+    element = soup.select_one(selector)
+    if element and element.name == 'img':
+        src = element.get('src')
+        if src:
+            if src.startswith('http'):
+                return src
+            else:
+                return urljoin(base_url, src)
+    return None
+
+def upload_image(base_url, username, password, image_url):
+    """Downloads and uploads an image to WordPress media library."""
+    # Download image
+    img_response = requests.get(image_url, timeout=15)
+    img_response.raise_for_status()
+
+    # Get filename
+    filename = image_url.split('/')[-1]
+    if not filename or '.' not in filename:
+        filename = 'image.jpg'
+
+    # Upload to WP
+    media_url = f"{base_url.rstrip('/')}/wp-json/wp/v2/media"
+    content_type = img_response.headers.get('content-type', 'image/jpeg')
+    files = {'file': (filename, img_response.content, content_type)}
+    res = requests.post(media_url, files=files, auth=(username, password), timeout=20)
+    res.raise_for_status()
+    media_data = res.json()
+    return media_data['id']
+
 def process_and_post():
     """Processes one pending post from the database and posts it to the corresponding WordPress site."""
     logging.info("Checking for pending posts...")
@@ -155,6 +190,7 @@ def process_and_post():
         content = extract_element(soup, site_config.get('content_selector'))
         # time can be handled more specifically if needed (e.g., parsing datetime)
         post_time = extract_element(soup, site_config.get('time_selector'))
+        image_url = extract_image_url(soup, site_config.get('featured_image_selector'), post_url)
 
         if not title or not content:
             raise ValueError("Failed to extract title or content.")
@@ -165,15 +201,24 @@ def process_and_post():
         if isinstance(base_urls, str):
             base_urls = [base_urls]
 
-        post_data = {
-            'title': title,
-            'content': content,
-            'status': source_config.get('default_status', 'publish'),
-            # 'date': post_time # This might need parsing and formatting
-        }
-
         all_posted_successfully = True
         for base_url in base_urls:
+            post_data = {
+                'title': title,
+                'content': content,
+                'status': source_config.get('default_status', 'publish'),
+                # 'date': post_time # This might need parsing and formatting
+            }
+
+            # Upload featured image if available
+            if image_url:
+                try:
+                    media_id = upload_image(base_url, username, password, image_url)
+                    post_data['featured_media'] = media_id
+                    logging.info(f"Uploaded featured image to {base_url}")
+                except Exception as e:
+                    logging.error(f"Failed to upload featured image to {base_url}: {e}")
+
             wp_api_url = f"{base_url.rstrip('/')}/wp-json/wp/v2/posts"
             try:
                 res = requests.post(
