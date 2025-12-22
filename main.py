@@ -237,6 +237,10 @@ def main():
     logging.info("Running initial RSS poll...")
     poll_rss_feeds()
 
+    # Run initial process
+    logging.info("Running initial post processing...")
+    process_and_post()
+
     scheduler = BackgroundScheduler()
     # Using misfire_grace_time to prevent job from running multiple times if script is busy
     scheduler.add_job(poll_rss_feeds, 'interval', hours=1, misfire_grace_time=3600)
