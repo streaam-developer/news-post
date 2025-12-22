@@ -110,6 +110,8 @@ def extract_image_url(soup, selector, base_url):
     return None
 
 def clean_content(html):
+    if not html:
+        return ""
     soup = BeautifulSoup(html, 'html.parser')
     # Remove unwanted tags
     for tag in soup(['script', 'style', 'nav', 'aside', 'footer', 'header', 'iframe', 'form', 'noscript']):
