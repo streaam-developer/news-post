@@ -6,7 +6,7 @@
     "sources": [
       {
         "username": "admin",
-        "application_password": "ybgZ tg8m aAbE 3Np5 GG8K lpuS",
+        "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
         "default_status": "publish",
         "default_categories": [],
         "default_tags": [],
@@ -14,7 +14,7 @@
         "sites": [
           {
             "name": "niveshskill.com",
-            "base_url": "https://niveshskill.com",
+            "base_url": "https://yojana11.com/",
             "rss_url": "https://timesofindia.indiatimes.com/rssfeeds/1081479906.cms",
             "title_selector": "h1",
             "content_selector": "div[data-articlebody='1'], .article_content",
