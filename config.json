@@ -15,7 +15,7 @@
           {
             "name": "enterteinment",
             "base_url": "https://yojana11.com",
-            "rss_url": "https://timesofindia.indiatimes.com/rssfeeds/1081479906.cms",
+            "rss_url": "https://feeds.feedburner.com/ndtvmovies-latest",
             "title_selector": "h1",
             "content_selector": "div[data-articlebody='1'], .article_content",
             "time_selector": "span[itemprop='dateModified'], span[itemprop='datePublished'], .date",
