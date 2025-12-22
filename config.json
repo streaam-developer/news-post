@@ -16,16 +16,10 @@
             "name": "enterteinment",
             "base_url": "https://yojana11.com",
             "rss_url": "https://www.hindustantimes.com/feeds/rss/entertainment/rssfeed.xml",
-            
-  "title_selector": "h1.arttitle",
-  "content_selector": "div.content",
+  "title_selector": "h1.hdg1",
+  "content_selector": "div.storyDetails .detail",
   "time_selector": "meta[property='article:modified_time']",
-
-
-          "featured_image_selector": "figure.art-image img"
-
-
-
+  "featured_image_selector": "meta[property='og:image']"
           }
         ]
       }
