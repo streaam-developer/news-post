@@ -63,16 +63,20 @@ def poll_rss_feeds():
     cursor = conn.cursor()
 
     for source in config.get('sources', []):
+        logging.info(f"Processing source: {source.get('username')}")
         for site in source.get('sites', []):
             rss_url = site.get('rss_url')
+            logging.info(f"Polling RSS feed: {rss_url}")
             if not rss_url:
                 continue
 
             try:
                 feed = feedparser.parse(rss_url)
+                logging.info(f"Found {len(feed.entries)} entries in feed")
                 for entry in feed.entries:
                     post_url = entry.link
                     slug = get_slug_from_url(post_url)
+                    logging.debug(f"Processing entry: {post_url}, slug: {slug}")
 
                     # Check for duplicates
                     cursor.execute("SELECT id FROM posts WHERE post_url = %s OR slug = %s", (post_url, slug))
@@ -83,6 +87,8 @@ def poll_rss_feeds():
                             (post_url, rss_url, slug)
                         )
                         logging.info(f"New post found and stored: {post_url}")
+                    else:
+                        logging.debug(f"Post already exists: {post_url}")
 
             except Exception as e:
                 logging.error(f"Error polling feed {rss_url}: {e}")
@@ -160,6 +166,8 @@ def process_and_post():
         conn.commit()
         conn.close()
         return
+
+    logging.info(f"Slug {slug} not posted yet, proceeding.")
 
     config = load_config()
     site_config = None
@@ -251,6 +259,10 @@ def process_and_post():
 def main():
     """Main function to set up the database and schedule the jobs."""
     setup_database()
+
+    # Run initial poll to populate DB
+    logging.info("Running initial RSS poll...")
+    poll_rss_feeds()
 
     scheduler = BackgroundScheduler()
     # Using misfire_grace_time to prevent job from running multiple times if script is busy
