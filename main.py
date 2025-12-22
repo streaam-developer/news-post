@@ -270,6 +270,7 @@ def process_single_post(post_doc):
                     logging.error(f"Failed to upload featured image to {base_url}: {e}")
 
             wp_api_url = f"{base_url.rstrip('/')}/wp-json/wp/v2/posts"
+            logging.info(f"Posting to {wp_api_url} with data: {post_data}")
             try:
                 res = requests.post(
                     wp_api_url,
@@ -290,6 +291,8 @@ def process_single_post(post_doc):
                     all_posted_successfully = False
             except requests.exceptions.RequestException as e:
                 logging.error(f"Failed to post to {base_url}: {e}")
+                if hasattr(e, 'response') and e.response:
+                    logging.error(f"Response body: {e.response.text[:500]}")
                 failed_sites_collection.update_one(
                     {'site_url': base_url},
                     {'$set': {'failed_at': datetime.utcnow()}},
