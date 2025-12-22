@@ -312,7 +312,7 @@ def main():
     scheduler = BackgroundScheduler()
     # Using misfire_grace_time to prevent job from running multiple times if script is busy
     scheduler.add_job(poll_rss_feeds, 'interval', hours=1, misfire_grace_time=3600)
-    scheduler.add_job(process_and_post, 'interval', minutes=10, misfire_grace_time=600)
+    scheduler.add_job(process_and_post, 'interval', minutes=10, misfire_grace_time=5)
     scheduler.start()
 
     logging.info("Scheduler started. Press Ctrl+C to exit.")
