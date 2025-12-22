@@ -192,6 +192,9 @@ def process_and_post():
                 'title': title,
                 'content': content,
                 'status': source_config.get('default_status', 'publish'),
+                'slug': slug.replace('.cms', ''),
+                'categories': source_config.get('default_categories', []),
+                'tags': source_config.get('default_tags', []),
                 # 'date': post_time # This might need parsing and formatting
             }
 
