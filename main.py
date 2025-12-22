@@ -283,6 +283,8 @@ def process_single_post(post_doc):
                 )
                 logging.info(f"Response status code from {base_url}: {res.status_code}")
                 logging.info(f"Response headers from {base_url}: {res.headers}")
+                if res.status_code >= 400:
+                    logging.error(f"Response body: {res.text[:500]}")
                 res.raise_for_status()
                 failed_sites_collection.delete_one({'site_url': base_url})
                 try:
@@ -324,7 +326,7 @@ def process_multiple_posts():
     posts_collection = db['posts']
 
     filter_query = {'$or': [{'failed_at': {'$exists': False}}, {'failed_at': {'$lt': datetime.utcnow() - timedelta(hours=1)}}]}
-    pending_posts = list(posts_collection.find(filter_query, sort=[('created_at', 1)], limit=10))
+    pending_posts = list(posts_collection.find(filter_query, sort=[('created_at', 1)], limit=1))
 
     if not pending_posts:
         logging.info("No pending posts found.")
