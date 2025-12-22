@@ -10,6 +10,7 @@ import logging
 from urllib.parse import urljoin, urlparse
 from datetime import datetime, timedelta
 import re
+import threading
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -145,24 +146,16 @@ def upload_image(base_url, username, password, image_url):
     media_data = res.json()
     return media_data['id']
 
-def process_and_post():
-    """Processes one pending post from the database and posts it to the corresponding WordPress site."""
-    logging.info("Checking for pending posts...")
+def process_single_post(post_doc):
+    """Processes a single pending post from the database and posts it to the corresponding WordPress site."""
     db = get_db_connection()
     posts_collection = db['posts']
     posted_slugs_collection = db['posted_slugs']
 
-    filter_query = {'$or': [{'failed_at': {'$exists': False}}, {'failed_at': {'$lt': datetime.utcnow() - timedelta(hours=1)}}]}
-    post_to_process = posts_collection.find_one(filter=filter_query, sort=[('created_at', 1)])
-
-    if post_to_process is None:
-        logging.info("No pending posts found.")
-        return
-
-    post_id = post_to_process['_id']
-    post_url = post_to_process['post_url']
-    rss_url = post_to_process['rss_url']
-    slug = post_to_process['slug']
+    post_id = post_doc['_id']
+    post_url = post_doc['post_url']
+    rss_url = post_doc['rss_url']
+    slug = post_doc['slug']
     logging.info(f"Processing post {post_id}: {post_url}")
 
     # Check if slug already posted
@@ -319,6 +312,30 @@ def process_and_post():
         logging.error(f"Error processing post {post_url}: {e}")
         posts_collection.update_one({'_id': post_id}, {'$set': {'failed_at': datetime.utcnow()}})
 
+def process_multiple_posts():
+    """Processes up to 10 pending posts concurrently."""
+    logging.info("Checking for pending posts...")
+    db = get_db_connection()
+    posts_collection = db['posts']
+
+    filter_query = {'$or': [{'failed_at': {'$exists': False}}, {'failed_at': {'$lt': datetime.utcnow() - timedelta(hours=1)}}]}
+    pending_posts = list(posts_collection.find(filter_query, sort=[('created_at', 1)], limit=10))
+
+    if not pending_posts:
+        logging.info("No pending posts found.")
+        return
+
+    threads = []
+    for post_doc in pending_posts:
+        t = threading.Thread(target=process_single_post, args=(post_doc,))
+        t.start()
+        threads.append(t)
+
+    for t in threads:
+        t.join()
+
+    logging.info(f"Processed {len(pending_posts)} posts.")
+
 def main():
     """Main function to set up the database and schedule the jobs."""
     setup_database()
@@ -329,12 +346,12 @@ def main():
 
     # Run initial process
     logging.info("Running initial post processing...")
-    process_and_post()
+    process_multiple_posts()
 
     scheduler = BackgroundScheduler()
     # Using misfire_grace_time to prevent job from running multiple times if script is busy
     scheduler.add_job(poll_rss_feeds, 'interval', hours=1, misfire_grace_time=3600)
-    scheduler.add_job(process_and_post, 'interval', seconds=10, misfire_grace_time=5)
+    scheduler.add_job(process_multiple_posts, 'interval', seconds=10, misfire_grace_time=5)
     scheduler.start()
 
     logging.info("Scheduler started. Press Ctrl+C to exit.")
