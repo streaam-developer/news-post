@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 from apscheduler.schedulers.background import BackgroundScheduler
 import logging
 from urllib.parse import urljoin, urlparse
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -152,7 +152,8 @@ def process_and_post():
     posts_collection = db['posts']
     posted_slugs_collection = db['posted_slugs']
 
-    post_to_process = posts_collection.find_one(sort=[('created_at', 1)])
+    filter_query = {'$or': [{'failed_at': {'$exists': False}}, {'failed_at': {'$lt': datetime.utcnow() - timedelta(hours=1)}}]}
+    post_to_process = posts_collection.find_one(filter=filter_query, sort=[('created_at', 1)])
 
     if post_to_process is None:
         logging.info("No pending posts found.")
@@ -288,6 +289,7 @@ def process_and_post():
                 'slug': slug,
                 'posted_at': datetime.utcnow()
             })
+            posts_collection.update_one({'_id': post_id}, {'$unset': {'failed_at': 1}})
             posts_collection.delete_one({'_id': post_id})
             logging.info(f"Successfully processed and posted: {post_url}")
         else:
@@ -295,7 +297,7 @@ def process_and_post():
 
     except Exception as e:
         logging.error(f"Error processing post {post_url}: {e}")
-        posts_collection.delete_one({'_id': post_id})
+        posts_collection.update_one({'_id': post_id}, {'$set': {'failed_at': datetime.utcnow()}})
 
 def main():
     """Main function to set up the database and schedule the jobs."""
