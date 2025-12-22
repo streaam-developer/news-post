@@ -18,7 +18,7 @@
             "rss_url": "https://www.indiatvnews.com/rssnews/topstory-entertainment.xml",
             
   "title_selector": "h1.arttitle",
-  "content_selector": "div.content p",
+  "content_selector": "div.content",
   "time_selector": "meta[property='article:published_time'], meta[property='article:modified_time'], .publis-date",
 
 

@@ -77,11 +77,11 @@ def poll_rss_feeds():
     logging.info("Finished polling RSS feeds.")
 
 def extract_element(soup, selector):
-    """Safely extracts text from an element using a CSS selector."""
+    """Safely extracts HTML from an element using a CSS selector."""
     if not selector:
         return None
     element = soup.select_one(selector)
-    return element.get_text(strip=True) if element else None
+    return element.decode_contents() if element else None
 
 def extract_image_url(soup, selector, base_url):
     """Safely extracts image URL from an element using a CSS selector."""
