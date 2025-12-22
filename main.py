@@ -29,7 +29,7 @@ def get_db_connection():
 def setup_database():
     """Sets up the MongoDB database (collections are created automatically)."""
     db = get_db_connection()
-    # Collections: posts and posted_slugs
+    # Collections: posts, posted_slugs, failed_sites
     logging.info("Database setup complete.")
 
 def get_slug_from_url(url):
@@ -236,6 +236,20 @@ def process_and_post():
         elif not isinstance(base_urls, list):
             base_urls = []
 
+        failed_sites_collection = db['failed_sites']
+        active_urls = []
+        for base_url in base_urls:
+            failed_doc = failed_sites_collection.find_one({'site_url': base_url})
+            if failed_doc and failed_doc['failed_at'] > datetime.utcnow() - timedelta(hours=1):
+                logging.info(f"Skipping recently failed site: {base_url}")
+                continue
+            active_urls.append(base_url)
+
+        if not active_urls:
+            logging.info("All sites failed recently, marking post as failed.")
+            posts_collection.update_one({'_id': post_id}, {'$set': {'failed_at': datetime.utcnow()}})
+            return
+
         post_data = {
             'title': title,
             'content': content,
@@ -251,7 +265,7 @@ def process_and_post():
             except ValueError:
                 logging.warning(f"Could not parse date: {post_time}")
         all_posted_successfully = True
-        for base_url in base_urls:
+        for base_url in active_urls:
 
             # Upload featured image if available
             if image_url:
@@ -274,6 +288,7 @@ def process_and_post():
                 logging.info(f"Response status code from {base_url}: {res.status_code}")
                 logging.info(f"Response headers from {base_url}: {res.headers}")
                 res.raise_for_status()
+                failed_sites_collection.delete_one({'site_url': base_url})
                 try:
                     post_response = res.json()
                     logging.info(f"Successfully posted to {base_url}. Post ID: {post_response.get('id')}")
@@ -282,6 +297,11 @@ def process_and_post():
                     all_posted_successfully = False
             except requests.exceptions.RequestException as e:
                 logging.error(f"Failed to post to {base_url}: {e}")
+                failed_sites_collection.update_one(
+                    {'site_url': base_url},
+                    {'$set': {'failed_at': datetime.utcnow()}},
+                    upsert=True
+                )
                 all_posted_successfully = False
 
         if all_posted_successfully:
