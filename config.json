@@ -49,89 +49,10 @@
       "default_tags": [],
       "post_type": "posts"
     },
-    {
-      "name": "WP Site 1 - viands.online",
-      "base_url": "https://viands.online",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
-    {
-      "name": "WP Site 2 - kedge.world",
-      "base_url": "https://kedge.world",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
-    {
-      "name": "WP Site 3 - badgered.world",
-      "base_url": "https://badgered.world",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
-    {
-      "name": "WP Site 4 - mdseotools.com",
-      "base_url": "https://mdseotools.com",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
-    {
-      "name": "WP Site 5 - Allnotes.in",
-      "base_url": "https://Allnotes.in",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
+    
     {
       "name": "WP Site 6 - tessofficial.com",
       "base_url": "https://tessofficial.com",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
-    {
-      "name": "WP Site 7 - sealanebio.com",
-      "base_url": "https://sealanebio.com",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
-    {
-      "name": "WP Site 8 - Bihartown.com",
-      "base_url": "https://Bihartown.com",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
-    {
-      "name": "WP Site 9 - hypicc.com",
-      "base_url": "https://hypicc.com",
       "username": "admin",
       "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
       "default_status": "publish",
@@ -149,66 +70,7 @@
       "default_tags": [],
       "post_type": "posts"
     },
-    {
-      "name": "WP Site 11 - glimmerbyte.com",
-      "base_url": "https://glimmerbyte.com",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
-    {
-      "name": "WP Site 12 - eduprothink.com",
-      "base_url": "https://eduprothink.com",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
-    {
-      "name": "WP Site 14 - evcarjankari.com",
-      "base_url": "https://evcarjankari.com",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
-    {
-      "name": "WP Site 15 - ghiblistudioart.in",
-      "base_url": "https://ghiblistudioart.in",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
-    {
-      "name": "WP Site 16 - stopwatchcentral.com",
-      "base_url": "https://stopwatchcentral.com",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
-    {
-      "name": "WP Site 17 - wheeltactics.xyz",
-      "base_url": "https://wheeltactics.xyz",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
+      
     {
       "name": "WP Site 18 - yojana11.com",
       "base_url": "https://yojana11.com",
@@ -219,76 +81,8 @@
       "default_tags": [],
       "post_type": "posts"
     },
-    {
-      "name": "WP Site 19 - dhanyogi.com",
-      "base_url": "https://dhanyogi.com",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
-    {
-      "name": "WP Site 20 - paisasutra.com",
-      "base_url": "https://paisasutra.com",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
-    {
-      "name": "WP Site 21 - motahone.in",
-      "base_url": "https://motahone.in",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
-    {
-      "name": "WP Site 22 - hypicprompt.in",
-      "base_url": "https://hypicprompt.in",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
-    {
-      "name": "WP Site 23 - thedeorianews.com",
-      "base_url": "https://thedeorianews.com",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
-    {
-      "name": "WP Site 24 - Bgmiobb.com",
-      "base_url": "https://Bgmiobb.com",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
-    {
-      "name": "WP Site 25 - Fitauto.in",
-      "base_url": "https://Fitauto.in",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
+
+    
     {
       "name": "WP Site 27 - profitwalla.com",
       "base_url": "https://profitwalla.com",
@@ -299,16 +93,7 @@
       "default_tags": [],
       "post_type": "posts"
     },
-    {
-      "name": "WP Site 28 - kyta.in",
-      "base_url": "https://kyta.in",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
-    },
+
     {
       "name": "WP Site 29 - biharbhumi.info.in",
       "base_url": "https://biharbhumi.info.in",
@@ -318,17 +103,8 @@
       "default_categories": [],
       "default_tags": [],
       "post_type": "posts"
-    },
-    {
-      "name": "WP Site 30 - subhadralist.org.in",
-      "base_url": "https://subhadralist.org.in",
-      "username": "admin",
-      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
-      "default_status": "publish",
-      "default_categories": [],
-      "default_tags": [],
-      "post_type": "posts"
     }
+
   ],
   "runtime": {
     "poll_interval_seconds": 100,
