@@ -158,9 +158,7 @@ def process_and_post():
 
     if not site_config or not source_config:
         logging.error(f"No configuration found for RSS feed: {rss_url}")
-        cursor.execute("DELETE FROM posts WHERE id = %s", (post_id,))
-        conn.commit()
-        conn.close()
+        posts_collection.delete_one({'_id': post_id})
         return
 
     try:
@@ -178,7 +176,9 @@ def process_and_post():
         logging.info(f"Extracted content length: {len(content) if content else 0}")
 
         if not title or not content:
-            raise ValueError("Failed to extract title or content.")
+            logging.error("Failed to extract title or content.")
+            posts_collection.delete_one({'_id': post_id})
+            return
 
         username = source_config['username']
         password = source_config['application_password']
@@ -226,7 +226,7 @@ def process_and_post():
             posts_collection.delete_one({'_id': post_id})
             logging.info(f"Successfully processed and posted: {post_url}")
         else:
-            raise Exception("Failed to post to one or more sites.")
+            logging.error(f"Failed to post to one or more sites for {post_url}. Will retry later.")
 
     except Exception as e:
         logging.error(f"Error processing post {post_url}: {e}")
