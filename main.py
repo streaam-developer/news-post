@@ -94,8 +94,13 @@ def extract_image_url(soup, selector, base_url):
     if not selector:
         return None
     element = soup.select_one(selector)
-    if element and element.name == 'img':
-        src = element.get('src')
+    if element:
+        if element.name == 'meta':
+            src = element.get('content')
+        elif element.name == 'img':
+            src = element.get('src')
+        else:
+            src = None
         if src:
             if src.startswith('http'):
                 return src
@@ -223,7 +228,12 @@ def process_and_post():
         password = source_config['application_password']
         base_urls = site_config['base_url']
         if isinstance(base_urls, str):
-            base_urls = [base_urls]
+            if ',' in base_urls:
+                base_urls = [url.strip() for url in base_urls.split(',') if url.strip()]
+            else:
+                base_urls = [base_urls]
+        elif not isinstance(base_urls, list):
+            base_urls = []
 
         post_data = {
             'title': title,
