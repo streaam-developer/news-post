@@ -1,5 +1,5 @@
 import json
-import sqlite3
+import mysql.connector
 import time
 import feedparser
 import requests
@@ -10,25 +10,40 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 CONFIG_FILE = 'config.json'
-DB_FILE = 'posts.db'
 
 def load_config():
     """Loads the configuration from config.json."""
     with open(CONFIG_FILE, 'r') as f:
         return json.load(f)
 
+def get_db_connection():
+    config = load_config()
+    db_config = config['db']
+    return mysql.connector.connect(
+        host=db_config['host'],
+        port=db_config['port'],
+        user=db_config['user'],
+        password=db_config['password'],
+        database=db_config['database']
+    )
+
 def setup_database():
-    """Sets up the SQLite database and creates the posts table if it doesn't exist."""
-    conn = sqlite3.connect(DB_FILE)
+    """Sets up the MySQL database and creates the tables if they don't exist."""
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS posts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            post_url TEXT NOT NULL UNIQUE,
-            rss_url TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            slug TEXT NOT NULL UNIQUE
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            post_url VARCHAR(500) NOT NULL UNIQUE,
+            rss_url VARCHAR(500) NOT NULL,
+            slug VARCHAR(255) NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS posted_slugs (
+            slug VARCHAR(255) PRIMARY KEY,
+            posted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     conn.commit()
@@ -43,7 +58,7 @@ def poll_rss_feeds():
     """Polls all RSS feeds from the config and stores new post links in the database."""
     logging.info("Polling RSS feeds...")
     config = load_config()
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
 
     for source in config.get('sources', []):
@@ -59,11 +74,11 @@ def poll_rss_feeds():
                     slug = get_slug_from_url(post_url)
 
                     # Check for duplicates
-                    cursor.execute("SELECT id FROM posts WHERE post_url = ? OR slug = ?", (post_url, slug))
+                    cursor.execute("SELECT id FROM posts WHERE post_url = %s OR slug = %s", (post_url, slug))
                     if cursor.fetchone() is None:
                         # Insert new post
                         cursor.execute(
-                            "INSERT INTO posts (post_url, rss_url, slug) VALUES (?, ?, ?)",
+                            "INSERT INTO posts (post_url, rss_url, slug) VALUES (%s, %s, %s)",
                             (post_url, rss_url, slug)
                         )
                         logging.info(f"New post found and stored: {post_url}")
@@ -85,11 +100,10 @@ def extract_element(soup, selector):
 def process_and_post():
     """Processes one pending post from the database and posts it to the corresponding WordPress site."""
     logging.info("Checking for pending posts...")
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
 
-    cursor.execute("SELECT * FROM posts WHERE status = 'pending' ORDER BY created_at ASC LIMIT 1")
+    cursor.execute("SELECT * FROM posts ORDER BY created_at ASC LIMIT 1")
     post_to_process = cursor.fetchone()
 
     if post_to_process is None:
@@ -100,7 +114,17 @@ def process_and_post():
     post_id = post_to_process['id']
     post_url = post_to_process['post_url']
     rss_url = post_to_process['rss_url']
+    slug = post_to_process['slug']
     logging.info(f"Processing post {post_id}: {post_url}")
+
+    # Check if slug already posted
+    cursor.execute("SELECT slug FROM posted_slugs WHERE slug = %s", (slug,))
+    if cursor.fetchone():
+        logging.info(f"Slug {slug} already posted, skipping.")
+        cursor.execute("DELETE FROM posts WHERE id = %s", (post_id,))
+        conn.commit()
+        conn.close()
+        return
 
     config = load_config()
     site_config = None
@@ -117,7 +141,7 @@ def process_and_post():
 
     if not site_config or not source_config:
         logging.error(f"No configuration found for RSS feed: {rss_url}")
-        cursor.execute("UPDATE posts SET status = 'failed' WHERE id = ?", (post_id,))
+        cursor.execute("DELETE FROM posts WHERE id = %s", (post_id,))
         conn.commit()
         conn.close()
         return
@@ -165,14 +189,15 @@ def process_and_post():
                 all_posted_successfully = False
 
         if all_posted_successfully:
-            cursor.execute("UPDATE posts SET status = 'processed' WHERE id = ?", (post_id,))
+            cursor.execute("INSERT INTO posted_slugs (slug) VALUES (%s)", (slug,))
+            cursor.execute("DELETE FROM posts WHERE id = %s", (post_id,))
             logging.info(f"Successfully processed and posted: {post_url}")
         else:
             raise Exception("Failed to post to one or more sites.")
 
     except Exception as e:
         logging.error(f"Error processing post {post_url}: {e}")
-        cursor.execute("UPDATE posts SET status = 'failed' WHERE id = ?", (post_id,))
+        cursor.execute("DELETE FROM posts WHERE id = %s", (post_id,))
 
     finally:
         conn.commit()
