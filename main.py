@@ -9,6 +9,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import logging
 from urllib.parse import urljoin, urlparse
 from datetime import datetime
+import re
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -102,6 +103,22 @@ def extract_image_url(soup, selector, base_url):
                 return urljoin(base_url, src)
     return None
 
+def clean_content(html):
+    soup = BeautifulSoup(html, 'html.parser')
+    # Remove unwanted tags
+    for tag in soup(['script', 'style', 'nav', 'aside', 'footer', 'header', 'iframe', 'form', 'noscript']):
+        tag.decompose()
+    # Remove elements with certain classes or ids
+    for tag in soup.find_all(attrs={'class': re.compile(r'ad|ads|advertisement|social|share|related|sidebar|popup|modal', re.I)}):
+        tag.decompose()
+    for tag in soup.find_all(attrs={'id': re.compile(r'ad|ads|advertisement|social|share|related|sidebar|popup|modal', re.I)}):
+        tag.decompose()
+    # Remove empty tags
+    for tag in soup.find_all():
+        if not tag.get_text(strip=True) and tag.name not in ['img', 'br', 'hr', 'p']:
+            tag.decompose()
+    return str(soup)
+
 def upload_image(base_url, username, password, image_url):
     """Downloads and uploads an image to WordPress media library."""
     # Download image
@@ -184,6 +201,7 @@ def process_and_post():
 
         title = extract_element(soup, site_config.get('title_selector'))
         content = extract_element(soup, site_config.get('content_selector'))
+        content = clean_content(content)
         # time can be handled more specifically if needed (e.g., parsing datetime)
         post_time = extract_element(soup, site_config.get('time_selector'))
         image_url = extract_image_url(soup, site_config.get('featured_image_selector'), post_url)
