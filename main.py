@@ -58,7 +58,7 @@ def poll_rss_feeds():
                     logging.debug(f"Processing entry: {post_url}, slug: {slug}")
 
                     # Check for duplicates
-                    if posts_collection.find_one({'$or': [{'post_url': post_url}, {'slug': slug}]}):
+                    if posts_collection.find_one({'post_url': post_url}):
                         logging.debug(f"Post already exists: {post_url}")
                     else:
                         # Insert new post
