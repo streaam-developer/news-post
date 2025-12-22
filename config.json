@@ -16,9 +16,12 @@
             "name": "enterteinment",
             "base_url": "https://yojana11.com",
             "rss_url": "https://www.indiatvnews.com/rssnews/topstory-entertainment.xml",
-            "title_selector": "h1",
-            "content_selector": "div[data-articlebody='1'], .article_content",
-            "time_selector": "span[itemprop='dateModified'], span[itemprop='datePublished'], .date",
+            
+  "title_selector": "h1.arttitle",
+  "content_selector": "div.content",
+  "time_selector": "meta[property='article:published_time'], meta[property='article:modified_time'], .publis-date"
+
+
             "featured_image_selector": "img[itemprop='image'], .featured-image img"
 
 
