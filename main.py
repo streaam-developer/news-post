@@ -213,7 +213,8 @@ def process_and_post():
                     timeout=20
                 )
                 res.raise_for_status()
-                logging.info(f"Successfully posted to {base_url}")
+                post_response = res.json()
+                logging.info(f"Successfully posted to {base_url}. Post ID: {post_response.get('id')}")
             except requests.exceptions.RequestException as e:
                 logging.error(f"Failed to post to {base_url}: {e}")
                 all_posted_successfully = False
