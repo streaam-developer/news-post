@@ -15,7 +15,7 @@
           {
             "name": "enterteinment",
             "base_url": "https://yojana11.com",
-            "rss_url": "https://www.indiatvnews.com/rssnews/topstory-entertainment.xml",
+            "rss_url": "https://www.hindustantimes.com/feeds/rss/entertainment/rssfeed.xml",
             
   "title_selector": "h1.arttitle",
   "content_selector": "div.content",
