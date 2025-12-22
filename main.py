@@ -340,7 +340,7 @@ def process_multiple_posts():
     db = get_db_connection()
     posts_collection = db['posts']
 
-    filter_query = {'$or': [{'failed_at': {'$exists': False}}, {'failed_at': {'$lt': datetime.utcnow() - timedelta(hours=1)}}]}
+    filter_query = {'$or': [{'failed_at': {'$exists': False}}, {'failed_at': {'$lt': datetime.utcnow() - timedelta(minutes=30)}}]}
     pending_posts = list(posts_collection.find(filter_query, sort=[('created_at', 1)], limit=10))
 
     if not pending_posts:
@@ -372,7 +372,7 @@ def main():
 
     scheduler = BackgroundScheduler()
     # Using misfire_grace_time to prevent job from running multiple times if script is busy
-    scheduler.add_job(poll_rss_feeds, 'interval', hours=1, misfire_grace_time=3600)
+    scheduler.add_job(poll_rss_feeds, 'interval', minutes=10, misfire_grace_time=3600)
     scheduler.add_job(process_multiple_posts, 'interval', seconds=10, misfire_grace_time=5)
     scheduler.start()
 
