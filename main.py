@@ -213,8 +213,11 @@ def process_and_post():
                     wp_api_url,
                     json=post_data,
                     auth=(username, password),
-                    timeout=20
+                    timeout=20,
+                    headers={'Content-Type': 'application/json'}
                 )
+                logging.info(f"Response status code from {base_url}: {res.status_code}")
+                logging.info(f"Response headers from {base_url}: {res.headers}")
                 res.raise_for_status()
                 try:
                     post_response = res.json()
