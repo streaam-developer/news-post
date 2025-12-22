@@ -13,9 +13,45 @@
         "post_type": "posts",
         "sites": [
           {
-            "name": "enterteinment",
-            "base_url": "https://theindianbytes.in/,https://yojana11.com/,https://biharbhumi.info.in/",
+            "category": "entertainment",
+            "base_url": "https://theindianbytes.in/",
             "rss_url": "https://www.hindustantimes.com/feeds/rss/entertainment/rssfeed.xml",
+  "title_selector": "h1.hdg1",
+  "content_selector": "div.storyDetails .detail",
+  "time_selector": "meta[property='article:modified_time']",
+  "featured_image_selector": "meta[property='og:image']"
+          },
+          {
+            "category": "business",
+            "base_url": "https://yojana11.com/",
+            "rss_url": "https://www.hindustantimes.com/feeds/rss/business/rssfeed.xml",
+  "title_selector": "h1.hdg1",
+  "content_selector": "div.storyDetails .detail",
+  "time_selector": "meta[property='article:modified_time']",
+  "featured_image_selector": "meta[property='og:image']"
+          },
+          {
+            "category": "world-news",
+            "base_url": "https://yojana11.com/",
+            "rss_url": "https://www.hindustantimes.com/feeds/rss/world-news/rssfeed.xml",
+  "title_selector": "h1.hdg1",
+  "content_selector": "div.storyDetails .detail",
+  "time_selector": "meta[property='article:modified_time']",
+  "featured_image_selector": "meta[property='og:image']"
+          },
+          {
+            "category": "cricket",
+            "base_url": "https://yojana11.com/",
+            "rss_url": "https://www.hindustantimes.com/feeds/rss/cricket/rssfeed.xml",
+  "title_selector": "h1.hdg1",
+  "content_selector": "div.storyDetails .detail",
+  "time_selector": "meta[property='article:modified_time']",
+  "featured_image_selector": "meta[property='og:image']"
+          },
+          {
+            "category": "latest",
+            "base_url": "https://yojana11.com/",
+            "rss_url": "https://www.hindustantimes.com/feeds/rss/latest/rssfeed.xml",
   "title_selector": "h1.hdg1",
   "content_selector": "div.storyDetails .detail",
   "time_selector": "meta[property='article:modified_time']",

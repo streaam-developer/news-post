@@ -240,7 +240,7 @@ def process_and_post():
             'content': content,
             'status': source_config.get('default_status', 'publish'),
             'slug': slug.replace('.cms', ''),
-            'categories': source_config.get('default_categories', []),
+            'categories': [site_config.get('category', 'uncategorized')],
             'tags': source_config.get('default_tags', []),
         }
         if post_time:
