@@ -1,5 +1,5 @@
 import json
-import mysql.connector
+from pymongo import MongoClient
 import time
 import feedparser
 import requests
@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 from apscheduler.schedulers.background import BackgroundScheduler
 import logging
 from urllib.parse import urljoin
+from datetime import datetime
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -20,35 +21,13 @@ def load_config():
 def get_db_connection():
     config = load_config()
     db_config = config['db']
-    return mysql.connector.connect(
-        host=db_config['host'],
-        port=db_config['port'],
-        user=db_config['user'],
-        password=db_config['password'],
-        database=db_config['database']
-    )
+    client = MongoClient(db_config['connection_string'])
+    return client[db_config['database']]
 
 def setup_database():
-    """Sets up the MySQL database and creates the tables if they don't exist."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS posts (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            post_url VARCHAR(500) NOT NULL UNIQUE,
-            rss_url VARCHAR(500) NOT NULL,
-            slug VARCHAR(255) NOT NULL UNIQUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS posted_slugs (
-            slug VARCHAR(255) PRIMARY KEY,
-            posted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.commit()
-    conn.close()
+    """Sets up the MongoDB database (collections are created automatically)."""
+    db = get_db_connection()
+    # Collections: posts and posted_slugs
     logging.info("Database setup complete.")
 
 def get_slug_from_url(url):
@@ -59,8 +38,8 @@ def poll_rss_feeds():
     """Polls all RSS feeds from the config and stores new post links in the database."""
     logging.info("Polling RSS feeds...")
     config = load_config()
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    db = get_db_connection()
+    posts_collection = db['posts']
 
     for source in config.get('sources', []):
         logging.info(f"Processing source: {source.get('username')}")
@@ -79,22 +58,21 @@ def poll_rss_feeds():
                     logging.debug(f"Processing entry: {post_url}, slug: {slug}")
 
                     # Check for duplicates
-                    cursor.execute("SELECT id FROM posts WHERE post_url = %s OR slug = %s", (post_url, slug))
-                    if cursor.fetchone() is None:
-                        # Insert new post
-                        cursor.execute(
-                            "INSERT INTO posts (post_url, rss_url, slug) VALUES (%s, %s, %s)",
-                            (post_url, rss_url, slug)
-                        )
-                        logging.info(f"New post found and stored: {post_url}")
-                    else:
+                    if posts_collection.find_one({'$or': [{'post_url': post_url}, {'slug': slug}]}):
                         logging.debug(f"Post already exists: {post_url}")
+                    else:
+                        # Insert new post
+                        posts_collection.insert_one({
+                            'post_url': post_url,
+                            'rss_url': rss_url,
+                            'slug': slug,
+                            'created_at': datetime.utcnow()
+                        })
+                        logging.info(f"New post found and stored: {post_url}")
 
             except Exception as e:
                 logging.error(f"Error polling feed {rss_url}: {e}")
 
-    conn.commit()
-    conn.close()
     logging.info("Finished polling RSS feeds.")
 
 def extract_element(soup, selector):
@@ -141,30 +119,26 @@ def upload_image(base_url, username, password, image_url):
 def process_and_post():
     """Processes one pending post from the database and posts it to the corresponding WordPress site."""
     logging.info("Checking for pending posts...")
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    db = get_db_connection()
+    posts_collection = db['posts']
+    posted_slugs_collection = db['posted_slugs']
 
-    cursor.execute("SELECT * FROM posts ORDER BY created_at ASC LIMIT 1")
-    post_to_process = cursor.fetchone()
+    post_to_process = posts_collection.find_one(sort=[('created_at', 1)])
 
     if post_to_process is None:
         logging.info("No pending posts found.")
-        conn.close()
         return
 
-    post_id = post_to_process['id']
+    post_id = post_to_process['_id']
     post_url = post_to_process['post_url']
     rss_url = post_to_process['rss_url']
     slug = post_to_process['slug']
     logging.info(f"Processing post {post_id}: {post_url}")
 
     # Check if slug already posted
-    cursor.execute("SELECT slug FROM posted_slugs WHERE slug = %s", (slug,))
-    if cursor.fetchone():
+    if posted_slugs_collection.find_one({'slug': slug}):
         logging.info(f"Slug {slug} already posted, skipping.")
-        cursor.execute("DELETE FROM posts WHERE id = %s", (post_id,))
-        conn.commit()
-        conn.close()
+        posts_collection.delete_one({'_id': post_id})
         return
 
     logging.info(f"Slug {slug} not posted yet, proceeding.")
@@ -242,19 +216,18 @@ def process_and_post():
                 all_posted_successfully = False
 
         if all_posted_successfully:
-            cursor.execute("INSERT INTO posted_slugs (slug) VALUES (%s)", (slug,))
-            cursor.execute("DELETE FROM posts WHERE id = %s", (post_id,))
+            posted_slugs_collection.insert_one({
+                'slug': slug,
+                'posted_at': datetime.utcnow()
+            })
+            posts_collection.delete_one({'_id': post_id})
             logging.info(f"Successfully processed and posted: {post_url}")
         else:
             raise Exception("Failed to post to one or more sites.")
 
     except Exception as e:
         logging.error(f"Error processing post {post_url}: {e}")
-        cursor.execute("DELETE FROM posts WHERE id = %s", (post_id,))
-
-    finally:
-        conn.commit()
-        conn.close()
+        posts_collection.delete_one({'_id': post_id})
 
 def main():
     """Main function to set up the database and schedule the jobs."""

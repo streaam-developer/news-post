@@ -1,10 +1,7 @@
 {
   "db": {
-    "host": "mysql.gb.stackcp.com",
-    "port": 41041,
-    "user": "mix_site-323133f0b3",
-    "password": "v0clr9hzli",
-    "database": "mix_site-323133f0b3"
+    "connection_string": "mongodb+srv://sonukumarkrbbu60:lfkTvljnt25ehTt9@cluster0.2wrbftx.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
+    "database": "news_post"
   },
     "sources": [
       {
