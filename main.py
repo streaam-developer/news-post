@@ -77,11 +77,16 @@ def poll_rss_feeds():
     logging.info("Finished polling RSS feeds.")
 
 def extract_element(soup, selector):
-    """Safely extracts HTML from an element using a CSS selector."""
+    """Safely extracts text or content from an element using a CSS selector."""
     if not selector:
         return None
     element = soup.select_one(selector)
-    return element.decode_contents() if element else None
+    if element:
+        if element.name == 'meta':
+            return element.get('content')
+        else:
+            return element.decode_contents()
+    return None
 
 def extract_image_url(soup, selector, base_url):
     """Safely extracts image URL from an element using a CSS selector."""
@@ -181,6 +186,12 @@ def process_and_post():
         content = extract_element(soup, site_config.get('content_selector'))
         # time can be handled more specifically if needed (e.g., parsing datetime)
         post_time = extract_element(soup, site_config.get('time_selector'))
+        if post_time:
+            try:
+                post_time_dt = datetime.fromisoformat(post_time)
+                post_data['date'] = post_time_dt.isoformat()
+            except ValueError:
+                logging.warning(f"Could not parse date: {post_time}")
         image_url = extract_image_url(soup, site_config.get('featured_image_selector'), post_url)
 
         logging.info(f"Extracted title: {title[:50] if title else 'None'}")
