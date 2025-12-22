@@ -174,6 +174,9 @@ def process_and_post():
         post_time = extract_element(soup, site_config.get('time_selector'))
         image_url = extract_image_url(soup, site_config.get('featured_image_selector'), post_url)
 
+        logging.info(f"Extracted title: {title[:50] if title else 'None'}")
+        logging.info(f"Extracted content length: {len(content) if content else 0}")
+
         if not title or not content:
             raise ValueError("Failed to extract title or content.")
 
