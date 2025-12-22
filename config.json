@@ -1,10 +1,10 @@
 {
   "db": {
     "host": "mysql.gb.stackcp.com",
-    "port": 39319,
-    "user": "sites_posts-353037358285",
-    "password": "t4nkbjj3oi",
-    "database": "sites_posts-353037358285"
+    "port": 41041,
+    "user": "mix_site-323133f0b3",
+    "password": "v0clr9hzli",
+    "database": "mix_site-323133f0b3"
   },
     "sources": [
       {
