@@ -33,6 +33,19 @@ def setup_database():
     # Collections: posts, posted_slugs, failed_sites
     logging.info("Database setup complete.")
 
+def get_category_id(base_url, username, password, category_name):
+    """Get category ID by name from WordPress."""
+    url = f"{base_url.rstrip('/')}/wp-json/wp/v2/categories?search={category_name}"
+    try:
+        res = requests.get(url, auth=(username, password), timeout=10)
+        res.raise_for_status()
+        cats = res.json()
+        if cats:
+            return cats[0]['id']
+    except Exception as e:
+        logging.error(f"Failed to get category ID for {category_name} on {base_url}: {e}")
+    return None
+
 def get_slug_from_url(url):
     """Generates a simple slug from a URL."""
     return url.strip('/').split('/')[-1]
@@ -245,22 +258,24 @@ def process_single_post(post_doc):
             posts_collection.update_one({'_id': post_id}, {'$set': {'failed_at': datetime.utcnow()}})
             return
 
-        post_data = {
-            'title': title,
-            'content': content,
-            'status': source_config.get('default_status', 'publish'),
-            'slug': slug.replace('.cms', ''),
-            'categories': [site_config.get('category', 'uncategorized')],
-            'tags': source_config.get('default_tags', []),
-        }
-        if post_time:
-            try:
-                post_time_dt = datetime.fromisoformat(post_time)
-                post_data['date'] = post_time_dt.isoformat()
-            except ValueError:
-                logging.warning(f"Could not parse date: {post_time}")
         all_posted_successfully = True
         for base_url in active_urls:
+            category_name = site_config.get('category', 'uncategorized')
+            category_id = get_category_id(base_url, username, password, category_name)
+            post_data = {
+                'title': title,
+                'content': content,
+                'status': source_config.get('default_status', 'publish'),
+                'slug': slug.replace('.cms', ''),
+                'categories': [category_id] if category_id else [],
+                'tags': source_config.get('default_tags', []),
+            }
+            if post_time:
+                try:
+                    post_time_dt = datetime.fromisoformat(post_time)
+                    post_data['date'] = post_time_dt.isoformat()
+                except ValueError:
+                    logging.warning(f"Could not parse date: {post_time}")
 
             # Upload featured image if available
             if image_url:
