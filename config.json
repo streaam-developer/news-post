@@ -1,0 +1,30 @@
+{
+  "db": {
+    "host": "mysql.gb.stackcp.com",
+    "port": 39319,
+    "user": "sites_posts-353037358285",
+    "password": "t4nkbjj3oi",
+    "database": "sites_posts-353037358285"
+  },
+    "sources": [
+          {
+      "name": "niveshskill.com",
+      "base_url": "https://niveshskill.com",
+      "username": "admin",
+      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
+      "default_status": "publish",
+      "default_categories": [],
+      "default_tags": [],
+      "post_type": "posts"
+    },
+     {
+      "name": "WP Site 4 - mdseotools.com",
+      "base_url": "https://mdseotools.com",
+      "username": "admin",
+      "application_password": "n16a YtV4 zi18 RQvj zbJH 3cVP",
+      "default_status": "publish",
+      "default_categories": [],
+      "default_tags": [],
+      "post_type": "posts"
+    }
+    ]
