@@ -14,7 +14,7 @@
         "sites": [
           {
             "name": "enterteinment",
-            "base_url": "https://theindianbytes.in/",
+            "base_url": "https://theindianbytes.in/,https://yojana11.com/,https://biharbhumi.info.in/",
             "rss_url": "https://www.hindustantimes.com/feeds/rss/entertainment/rssfeed.xml",
   "title_selector": "h1.hdg1",
   "content_selector": "div.storyDetails .detail",

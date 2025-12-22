@@ -122,7 +122,8 @@ def clean_content(html):
 def upload_image(base_url, username, password, image_url):
     """Downloads and uploads an image to WordPress media library."""
     # Download image
-    img_response = requests.get(image_url, timeout=15)
+    scraper = cloudscraper.create_scraper()
+    img_response = scraper.get(image_url, timeout=15)
     img_response.raise_for_status()
 
     # Get filename
@@ -205,6 +206,10 @@ def process_and_post():
         # time can be handled more specifically if needed (e.g., parsing datetime)
         post_time = extract_element(soup, site_config.get('time_selector'))
         image_url = extract_image_url(soup, site_config.get('featured_image_selector'), post_url)
+        if image_url:
+            logging.info(f"Found featured image: {image_url}")
+        else:
+            logging.info("No featured image found")
 
         logging.info(f"Extracted title: {title[:50] if title else 'None'}")
         logging.info(f"Extracted content length: {len(content) if content else 0}")
