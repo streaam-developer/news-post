@@ -186,12 +186,6 @@ def process_and_post():
         content = extract_element(soup, site_config.get('content_selector'))
         # time can be handled more specifically if needed (e.g., parsing datetime)
         post_time = extract_element(soup, site_config.get('time_selector'))
-        if post_time:
-            try:
-                post_time_dt = datetime.fromisoformat(post_time)
-                post_data['date'] = post_time_dt.isoformat()
-            except ValueError:
-                logging.warning(f"Could not parse date: {post_time}")
         image_url = extract_image_url(soup, site_config.get('featured_image_selector'), post_url)
 
         logging.info(f"Extracted title: {title[:50] if title else 'None'}")
@@ -208,17 +202,22 @@ def process_and_post():
         if isinstance(base_urls, str):
             base_urls = [base_urls]
 
+        post_data = {
+            'title': title,
+            'content': content,
+            'status': source_config.get('default_status', 'publish'),
+            'slug': slug.replace('.cms', ''),
+            'categories': source_config.get('default_categories', []),
+            'tags': source_config.get('default_tags', []),
+        }
+        if post_time:
+            try:
+                post_time_dt = datetime.fromisoformat(post_time)
+                post_data['date'] = post_time_dt.isoformat()
+            except ValueError:
+                logging.warning(f"Could not parse date: {post_time}")
         all_posted_successfully = True
         for base_url in base_urls:
-            post_data = {
-                'title': title,
-                'content': content,
-                'status': source_config.get('default_status', 'publish'),
-                'slug': slug.replace('.cms', ''),
-                'categories': source_config.get('default_categories', []),
-                'tags': source_config.get('default_tags', []),
-                # 'date': post_time # This might need parsing and formatting
-            }
 
             # Upload featured image if available
             if image_url:
