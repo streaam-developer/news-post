@@ -14,7 +14,7 @@
         "sites": [
           {
             "name": "niveshskill.com",
-            "base_url": "https://niveshskill.com",
+            "base_url": "https://yojana11.com",
             "rss_url": "https://timesofindia.indiatimes.com/rssfeeds/1081479906.cms",
             "title_selector": "h1",
             "content_selector": "div[data-articlebody='1'], .article_content",
