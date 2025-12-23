@@ -13,6 +13,47 @@
         "post_type": "posts",
         "sites": [
           {
+            "category": "business",
+            "base_url": "https://niveshskill.com/",
+            "rss_url": "https://www.hindustantimes.com/feeds/rss/business/rssfeed.xml",
+  "title_selector": "h1.artTitle",
+  "content_selector": "div.articleDetail_artContent__F_8dX",
+  "time_selector": "meta[property='article:modified_time']",
+  "featured_image_selector": "meta[property='og:image']"
+          },
+          {
+            "category": "entertainment",
+            "base_url": "https://tessofficial.com/",
+            "rss_url": "https://www.hindustantimes.com/feeds/rss/entertainment/rssfeed.xml",
+  "title_selector": "h1.hdg1",
+  "content_selector": "div.storyDetails .detail",
+  "time_selector": "meta[property='article:modified_time']",
+  "featured_image_selector": "meta[property='og:image']"
+          },
+          {
+            "category": "world-news",
+            "base_url": "https://profitwalla.com/",
+            "rss_url": "https://www.hindustantimes.com/feeds/rss/world-news/rssfeed.xml",
+  "title_selector": "h1.hdg1",
+  "content_selector": "div.storyDetails .detail",
+  "time_selector": "meta[property='article:modified_time']",
+  "featured_image_selector": "meta[property='og:image']"
+
+
+          },
+          {
+            "category": "cricket",
+            "base_url": "https://yojana11.com/",
+            "rss_url": "https://www.hindustantimes.com/feeds/rss/cricket/rssfeed.xml",
+  
+  "title_selector": "h1.hdg1",
+  "content_selector": "div.storyDetails .detail",
+  "time_selector": "meta[property='article:modified_time']",
+  "featured_image_selector": "meta[property='og:image']"
+
+
+          },
+          {
             "category": "latest",
             "base_url": "https://biharbhumi.info.in/",
             "rss_url": "https://www.hindustantimes.com/feeds/rss/latest/rssfeed.xml",
