@@ -30,7 +30,7 @@ def get_db_connection():
 def setup_database():
     """Sets up the MongoDB database (collections are created automatically)."""
     db = get_db_connection()
-    # Collections: posts, posted_slugs, failed_sites
+    # Collections: posts, posted_records, failed_sites
     logging.info("Database setup complete.")
 
 def get_category_id(base_url, username, password, category_name):
@@ -180,21 +180,13 @@ def process_single_post(post_doc):
     """Processes a single pending post from the database and posts it to the corresponding WordPress site."""
     db = get_db_connection()
     posts_collection = db['posts']
-    posted_slugs_collection = db['posted_slugs']
+    posted_records_collection = db['posted_records']
 
     post_id = post_doc['_id']
     post_url = post_doc['post_url']
     rss_url = post_doc['rss_url']
     slug = post_doc['slug']
     logging.info(f"Processing post {post_id}: {post_url}")
-
-    # Check if slug already posted
-    if posted_slugs_collection.find_one({'slug': slug}):
-        logging.info(f"Slug {slug} already posted, skipping.")
-        posts_collection.delete_one({'_id': post_id})
-        return
-
-    logging.info(f"Slug {slug} not posted yet, proceeding.")
 
     config = load_config()
     source_config = None
@@ -260,21 +252,37 @@ def process_single_post(post_doc):
             posts_collection.update_one({'_id': post_id}, {'$set': {'failed_at': datetime.utcnow()}})
             return
 
-        all_posted_successfully = True
+        successful_posts = 0
         for domain in active_domains:
             base_url = domain['base_url']
+            if posted_records_collection.find_one({'site_url': base_url, 'slug': slug}):
+                logging.info(f"Already posted {slug} to {base_url}, skipping.")
+                successful_posts += 1
+                continue
+
             username = domain['username']
             password = domain['application_password']
+            categories_ids = []
+            # Add default categories
+            for cat_name in source_config.get('default_categories', []):
+                cat_id = get_category_id(base_url, username, password, cat_name)
+                if not cat_id:
+                    cat_id = create_category(base_url, username, password, cat_name)
+                if cat_id:
+                    categories_ids.append(cat_id)
+            # Add domain specific category
             category_name = domain.get('category', 'uncategorized')
             category_id = get_category_id(base_url, username, password, category_name)
             if not category_id:
                 category_id = create_category(base_url, username, password, category_name)
+            if category_id:
+                categories_ids.append(category_id)
             post_data = {
                 'title': title,
                 'content': content,
                 'status': source_config.get('default_status', 'publish'),
                 'slug': slug.replace('.cms', ''),
-                'categories': [category_id] if category_id else [],
+                'categories': categories_ids,
                 'tags': source_config.get('default_tags', []),
             }
             if post_time:
@@ -308,13 +316,18 @@ def process_single_post(post_doc):
                 if res.status_code >= 400:
                     logging.error(f"Response body: {res.text[:500]}")
                 res.raise_for_status()
+                posted_records_collection.insert_one({
+                    'site_url': base_url,
+                    'slug': slug,
+                    'posted_at': datetime.utcnow()
+                })
                 failed_sites_collection.delete_one({'site_url': base_url})
+                successful_posts += 1
                 try:
                     post_response = res.json()
                     logging.info(f"Successfully posted to {base_url}. Post ID: {post_response.get('id')}")
                 except ValueError:
                     logging.error(f"Posted to {base_url} but response is not JSON. Response: {res.text[:200]}")
-                    all_posted_successfully = False
             except requests.exceptions.RequestException as e:
                 logging.error(f"Failed to post to {base_url}: {e}")
                 if hasattr(e, 'response') and e.response:
@@ -324,18 +337,16 @@ def process_single_post(post_doc):
                     {'$set': {'failed_at': datetime.utcnow()}},
                     upsert=True
                 )
-                all_posted_successfully = False
 
-        if all_posted_successfully:
-            posted_slugs_collection.insert_one({
-                'slug': slug,
-                'posted_at': datetime.utcnow()
-            })
+        if successful_posts == len(active_domains):
             posts_collection.update_one({'_id': post_id}, {'$unset': {'failed_at': 1}})
             posts_collection.delete_one({'_id': post_id})
-            logging.info(f"Successfully processed and posted: {post_url}")
+            logging.info(f"Successfully processed and posted {slug} to all sites.")
+        elif successful_posts == 0:
+            posts_collection.update_one({'_id': post_id}, {'$set': {'failed_at': datetime.utcnow()}})
+            logging.error(f"Failed to post {slug} to any site. Will retry later.")
         else:
-            logging.error(f"Failed to post to one or more sites for {post_url}. Will retry later.")
+            logging.info(f"Posted {slug} to {successful_posts}/{len(active_domains)} sites. Will retry for remaining.")
 
     except Exception as e:
         logging.error(f"Error processing post {post_url}: {e}")
@@ -348,7 +359,7 @@ def process_multiple_posts():
     posts_collection = db['posts']
 
     filter_query = {'$or': [{'failed_at': {'$exists': False}}, {'failed_at': {'$lt': datetime.utcnow() - timedelta(minutes=30)}}]}
-    pending_posts = list(posts_collection.find(filter_query, sort=[('created_at', 1)], limit=10))
+    pending_posts = list(posts_collection.find(filter_query, sort=[('created_at', 1)], limit=30))
 
     if not pending_posts:
         logging.info("No pending posts found.")
