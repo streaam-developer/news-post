@@ -14,7 +14,7 @@
       "default_categories": [],
       "default_tags": [],
       "post_type": "posts",
-      "domains": [{"base_url": "https://niveshskill.com/", "username": "publisher", "application_password": "4aBFtyKOiVwVl53RlDqGA2Im", "category": "business"}]
+      "domains": [{"base_url": "https://niveshskill.com/", "username": "publisher", "application_password": "nxU8fzxU0wj4graohyBHge0F", "category": "business"}]
     },
     {
       "rss_url": "https://www.hindustantimes.com/feeds/rss/entertainment/rssfeed.xml",
@@ -26,7 +26,7 @@
       "default_categories": [],
       "default_tags": [],
       "post_type": "posts",
-      "domains": [{"base_url": "https://themovlesflix.online/", "username": "publisher", "application_password": "AtlfOz3eZBMn4Y993vBmw255", "category": "entertainment"}, {"base_url": "https://themovlesflix.info/", "username": "publisher", "application_password": "FmbVVt2Kg6rEcWYINKZdgCNL", "category": "entertainment"}, {"base_url": "https://movlesflix.info/", "username": "publisher", "application_password": "fgPfuQqg4mW5bQ1NxOFzdhnS", "category": "entertainment"}]
+      "domains": [{"base_url": "https://themovlesflix.online/", "username": "publisher", "application_password": "6efAzzx9TxqEbtWo6XCBLAvP", "category": "entertainment"}, {"base_url": "https://themovlesflix.info/", "username": "publisher", "application_password": "ptNpP5NfwhPaaAGZLGikXvDI", "category": "entertainment"}, {"base_url": "https://movlesflix.info/", "username": "publisher", "application_password": "LgdvbxOP1anZtVFkUi1AmJjE", "category": "entertainment"}]
     },
     {
       "rss_url": "https://www.hindustantimes.com/feeds/rss/cricket/rssfeed.xml",
@@ -38,7 +38,7 @@
       "default_categories": [],
       "default_tags": [],
       "post_type": "posts",
-      "domains": [{"base_url": "https://yojana11.com/", "username": "publisher", "application_password": "9AnfSQ9JlfTbCv7gflEKjPix", "category": "cricket"}]
+      "domains": [{"base_url": "https://yojana11.com/", "username": "publisher", "application_password": "d11pN7UfdK6BEHlL1Sil1x2v", "category": "cricket"}]
     },
     {
       "rss_url": "https://www.hindustantimes.com/feeds/rss/latest/rssfeed.xml",
@@ -50,7 +50,7 @@
       "default_categories": [],
       "default_tags": [],
       "post_type": "posts",
-      "domains": [{"base_url": "https://biharbhumi.info.in/", "username": "publisher", "application_password": "lTOmIsoJwoipYDR9jkqdEoFb", "category": "latest"}, {"base_url": "https://skybap.shop/", "username": "publisher", "application_password": "zcr7gen0VvNIs7iah0phkVfk", "category": "latest"}]
+      "domains": [{"base_url": "https://biharbhumi.info.in/", "username": "publisher", "application_password": "EvsAGbXo1yukCzhEWyalfeNH", "category": "latest"}, {"base_url": "https://skybap.shop/", "username": "publisher", "application_password": "cINc9wfNscihfb5g4XMbsjTJ", "category": "latest"}]
     }
   ]
 }
