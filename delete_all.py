@@ -29,20 +29,23 @@ def get_all_domains():
     return list(domains)
 
 def delete_all_posts_and_images(base_url, username, password):
-    """Delete all posts and their featured images from a WordPress site."""
+    """Delete all posts and their featured images from a WordPress site, including trashed ones."""
     logging.info(f"Deleting all posts and images from {base_url}")
 
-    # Get all posts
-    posts_url = f"{base_url.rstrip('/')}/wp-json/wp/v2/posts?per_page=100"
-    try:
-        res = requests.get(posts_url, auth=(username, password), timeout=30)
-        res.raise_for_status()
-        posts = res.json()
-    except Exception as e:
-        logging.error(f"Failed to get posts from {base_url}: {e}")
-        return
+    # Get published posts
+    statuses = ['publish', 'trash']
+    all_posts = []
+    for status in statuses:
+        posts_url = f"{base_url.rstrip('/')}/wp-json/wp/v2/posts?per_page=100&status={status}"
+        try:
+            res = requests.get(posts_url, auth=(username, password), timeout=30)
+            res.raise_for_status()
+            posts = res.json()
+            all_posts.extend(posts)
+        except Exception as e:
+            logging.error(f"Failed to get {status} posts from {base_url}: {e}")
 
-    for post in posts:
+    for post in all_posts:
         post_id = post['id']
         featured_media = post.get('featured_media')
 
@@ -62,6 +65,23 @@ def delete_all_posts_and_images(base_url, username, password):
             logging.info(f"Permanently deleted post {post_id} from {base_url}")
         except Exception as e:
             logging.error(f"Failed to delete post {post_id} from {base_url}: {e}")
+
+    # Also delete all media in trash
+    media_url = f"{base_url.rstrip('/')}/wp-json/wp/v2/media?per_page=100&status=trash"
+    try:
+        res = requests.get(media_url, auth=(username, password), timeout=30)
+        res.raise_for_status()
+        medias = res.json()
+        for media in medias:
+            media_id = media['id']
+            delete_url = f"{base_url.rstrip('/')}/wp-json/wp/v2/media/{media_id}?force=true"
+            try:
+                requests.delete(delete_url, auth=(username, password), timeout=10)
+                logging.info(f"Permanently deleted trashed media {media_id} from {base_url}")
+            except Exception as e:
+                logging.error(f"Failed to delete trashed media {media_id} from {base_url}: {e}")
+    except Exception as e:
+        logging.error(f"Failed to get trashed media from {base_url}: {e}")
 
 def clear_database():
     """Clear all records from the database."""
