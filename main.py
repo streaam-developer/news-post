@@ -21,6 +21,25 @@ def load_config():
     with open(CONFIG_FILE, 'r') as f:
         return json.load(f)
 
+def validate_config():
+    """Validates the configuration file."""
+    config = load_config()
+    if not config.get('db'):
+        raise ValueError("DB config missing")
+    if not config.get('sources'):
+        raise ValueError("Sources missing")
+    for source in config['sources']:
+        if not source.get('rss_url'):
+            raise ValueError("RSS URL missing in source")
+        if not source.get('domains'):
+            raise ValueError("Domains missing in source")
+        for domain in source['domains']:
+            required = ['base_url', 'username', 'application_password']
+            for req in required:
+                if req not in domain:
+                    raise ValueError(f"{req} missing in domain")
+    logging.info("Config validation passed.")
+
 def get_db_connection():
     config = load_config()
     db_config = config['db']
@@ -378,6 +397,7 @@ def process_multiple_posts():
 
 def main():
     """Main function to set up the database and schedule the jobs."""
+    validate_config()
     setup_database()
 
     # Run initial poll to populate DB

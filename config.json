@@ -38,7 +38,7 @@
       "default_categories": ["cricket"],
       "default_tags": [],
       "post_type": "posts",
-      "domains": [{"base_url": "https://yojana11.com/", "username": "publisher", "application_password": "d11pN7UfdK6BEHlL1Sil1x2v", "category": "cricket"}], "domains": [{"base_url": "https://tessofficial.com/", "username": "publisher", "application_password": "N8OdAJ3xVmQZUOTkwKeG5dw7", "category": "cricket"}]
+      "domains": [{"base_url": "https://yojana11.com/", "username": "publisher", "application_password": "d11pN7UfdK6BEHlL1Sil1x2v", "category": "cricket"}, {"base_url": "https://tessofficial.com/", "username": "publisher", "application_password": "N8OdAJ3xVmQZUOTkwKeG5dw7", "category": "cricket"}]
     },
     {
       "rss_url": "https://www.hindustantimes.com/feeds/rss/latest/rssfeed.xml",
