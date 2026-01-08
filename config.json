@@ -6,11 +6,10 @@
   "sources": [
     {
       "rss_url": "https://www.hindustantimes.com/feeds/rss/business/rssfeed.xml",
-      
-  "title_selector": "h1",
-  "content_selector": "div.storyDetail > p",
-  "time_selector": "meta[property='article:modified_time']",
-  "featured_image_selector": "meta[property='og:image']",
+  "title_selector": "h1.artTitle",
+  "content_selector": "div.artContent p.content",
+  "time_selector": "span.artTimes",
+  "featured_image_selector": "meta[property='og:image'], figure.artImage img",
       "default_status": "publish",
       "default_categories": [],
       "default_tags": [],
