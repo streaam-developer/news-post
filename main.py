@@ -41,9 +41,26 @@ def get_category_id(base_url, username, password, category_name):
         res.raise_for_status()
         cats = res.json()
         if cats:
+            logging.info(f"Category '{category_name}' found on {base_url}, ID: {cats[0]['id']}")
             return cats[0]['id']
+        else:
+            logging.warning(f"Category '{category_name}' not found on {base_url}, attempting to create it.")
     except Exception as e:
         logging.error(f"Failed to get category ID for {category_name} on {base_url}: {e}")
+    return None
+
+def create_category(base_url, username, password, category_name):
+    """Create a new category on WordPress and return its ID."""
+    url = f"{base_url.rstrip('/')}/wp-json/wp/v2/categories"
+    data = {'name': category_name}
+    try:
+        res = requests.post(url, json=data, auth=(username, password), timeout=10)
+        res.raise_for_status()
+        cat = res.json()
+        logging.info(f"Created category '{category_name}' on {base_url}, ID: {cat['id']}")
+        return cat['id']
+    except Exception as e:
+        logging.error(f"Failed to create category '{category_name}' on {base_url}: {e}")
     return None
 
 def get_slug_from_url(url):
@@ -250,6 +267,8 @@ def process_single_post(post_doc):
             password = domain['application_password']
             category_name = domain.get('category', 'uncategorized')
             category_id = get_category_id(base_url, username, password, category_name)
+            if not category_id:
+                category_id = create_category(base_url, username, password, category_name)
             post_data = {
                 'title': title,
                 'content': content,
