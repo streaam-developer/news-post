@@ -3,28 +3,100 @@
     "connection_string": "mongodb+srv://sonukumarkrbbu60:lfkTvljnt25ehTt9@cluster0.2wrbftx.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
     "database": "news_post"
   },
-    "sources": [
-      {
-        "username": "publisher",
-        "application_password": "LpKz iSnw 0VfM 2rKn O4VV YLyM",
-        "default_status": "publish",
-        "default_categories": [],
-        "default_tags": [],
-        "post_type": "posts",
-        "sites": [
-          
-          {
-            "category": "latest",
-            "base_url": "https://biharbhumi.info.in/",
-            "rss_url": "https://www.hindustantimes.com/feeds/rss/latest/rssfeed.xml",
-
-  "title_selector": "h1.hdg1",
-  "content_selector": "div.storyDetails .detail",
-  "time_selector": "meta[property='article:modified_time']",
-  "featured_image_selector": "meta[property='og:image']"
-
-          }
-        ]
-      }
-    ]
-  }
+  "sources": [
+    {
+      "rss_url": "https://www.hindustantimes.com/feeds/rss/business/rssfeed.xml",
+      "title_selector": "h1.artTitle",
+      "content_selector": "div.articleDetail_artContent__F_8dX",
+      "time_selector": "meta[property='article:modified_time']",
+      "featured_image_selector": "meta[property='og:image']",
+      "default_status": "publish",
+      "default_categories": [],
+      "default_tags": [],
+      "post_type": "posts",
+      "domains": [
+        {
+          "base_url": "https://niveshskill.com/",
+          "username": "publisher",
+          "application_password": "4aBFtyKOiVwVl53RlDqGA2Im",
+          "category": "business"
+        }
+      ]
+    },
+    {
+      "rss_url": "https://www.hindustantimes.com/feeds/rss/entertainment/rssfeed.xml",
+      "title_selector": "h1.hdg1",
+      "content_selector": "div.storyDetails .detail",
+      "time_selector": "meta[property='article:modified_time']",
+      "featured_image_selector": "meta[property='og:image']",
+      "default_status": "publish",
+      "default_categories": [],
+      "default_tags": [],
+      "post_type": "posts",
+      "domains": [
+        {
+          "base_url": "https://themovlesflix.online/",
+          "username": "publisher",
+          "application_password": "AtlfOz3eZBMn4Y993vBmw255",
+          "category": "entertainment"
+        },
+        {
+          "base_url": "https://themovlesflix.info/",
+          "username": "publisher",
+          "application_password": "FmbVVt2Kg6rEcWYINKZdgCNL",
+          "category": "entertainment"
+        },
+        {
+          "base_url": "https://movlesflix.info/",
+          "username": "publisher",
+          "application_password": "fgPfuQqg4mW5bQ1NxOFzdhnS",
+          "category": "entertainment"
+        }
+      ]
+    },
+    {
+      "rss_url": "https://www.hindustantimes.com/feeds/rss/cricket/rssfeed.xml",
+      "title_selector": "h1.hdg1",
+      "content_selector": "div.storyDetails .detail",
+      "time_selector": "meta[property='article:modified_time']",
+      "featured_image_selector": "meta[property='og:image']",
+      "default_status": "publish",
+      "default_categories": [],
+      "default_tags": [],
+      "post_type": "posts",
+      "domains": [
+        {
+          "base_url": "https://yojana11.com/",
+          "username": "publisher",
+          "application_password": "9AnfSQ9JlfTbCv7gflEKjPix",
+          "category": "cricket"
+        }
+      ]
+    },
+    {
+      "rss_url": "https://www.hindustantimes.com/feeds/rss/latest/rssfeed.xml",
+      "title_selector": "h1.hdg1",
+      "content_selector": "div.storyDetails .detail",
+      "time_selector": "meta[property='article:modified_time']",
+      "featured_image_selector": "meta[property='og:image']",
+      "default_status": "publish",
+      "default_categories": [],
+      "default_tags": [],
+      "post_type": "posts",
+      "domains": [
+        {
+          "base_url": "https://biharbhumi.info.in/",
+          "username": "publisher",
+          "application_password": "lTOmIsoJwoipYDR9jkqdEoFb",
+          "category": "latest"
+        },
+        {
+          "base_url": "https://skybap.shop/",
+          "username": "publisher",
+          "application_password": "zcr7gen0VvNIs7iah0phkVfk",
+          "category": "latest"
+        }
+      ]
+    }
+  ]
+}

@@ -58,36 +58,34 @@ def poll_rss_feeds():
     posts_collection = db['posts']
 
     for source in config.get('sources', []):
-        logging.info(f"Processing source: {source.get('username')}")
-        for site in source.get('sites', []):
-            rss_url = site.get('rss_url')
-            logging.info(f"Polling RSS feed: {rss_url}")
-            if not rss_url:
-                continue
+        rss_url = source.get('rss_url')
+        logging.info(f"Polling RSS feed: {rss_url}")
+        if not rss_url:
+            continue
 
-            try:
-                feed = feedparser.parse(rss_url)
-                logging.info(f"Found {len(feed.entries)} entries in feed")
-                for entry in feed.entries:
-                    post_url = entry.link
-                    slug = get_slug_from_url(post_url)
-                    logging.debug(f"Processing entry: {post_url}, slug: {slug}")
+        try:
+            feed = feedparser.parse(rss_url)
+            logging.info(f"Found {len(feed.entries)} entries in feed")
+            for entry in feed.entries:
+                post_url = entry.link
+                slug = get_slug_from_url(post_url)
+                logging.debug(f"Processing entry: {post_url}, slug: {slug}")
 
-                    # Check for duplicates
-                    if posts_collection.find_one({'post_url': post_url}):
-                        logging.debug(f"Post already exists: {post_url}")
-                    else:
-                        # Insert new post
-                        posts_collection.insert_one({
-                            'post_url': post_url,
-                            'rss_url': rss_url,
-                            'slug': slug,
-                            'created_at': datetime.utcnow()
-                        })
-                        logging.info(f"New post found and stored: {post_url}")
+                # Check for duplicates
+                if posts_collection.find_one({'post_url': post_url}):
+                    logging.debug(f"Post already exists: {post_url}")
+                else:
+                    # Insert new post
+                    posts_collection.insert_one({
+                        'post_url': post_url,
+                        'rss_url': rss_url,
+                        'slug': slug,
+                        'created_at': datetime.utcnow()
+                    })
+                    logging.info(f"New post found and stored: {post_url}")
 
-            except Exception as e:
-                logging.error(f"Error polling feed {rss_url}: {e}")
+        except Exception as e:
+            logging.error(f"Error polling feed {rss_url}: {e}")
 
     logging.info("Finished polling RSS feeds.")
 
@@ -182,19 +180,14 @@ def process_single_post(post_doc):
     logging.info(f"Slug {slug} not posted yet, proceeding.")
 
     config = load_config()
-    site_config = None
     source_config = None
 
     for source in config.get('sources', []):
-        for site in source.get('sites', []):
-            if site.get('rss_url') == rss_url:
-                site_config = site
-                source_config = source
-                break
-        if site_config:
+        if source.get('rss_url') == rss_url:
+            source_config = source
             break
 
-    if not site_config or not source_config:
+    if not source_config:
         logging.error(f"No configuration found for RSS feed: {rss_url}")
         posts_collection.delete_one({'_id': post_id})
         return
@@ -214,12 +207,12 @@ def process_single_post(post_doc):
         response.raise_for_status()
         soup = BeautifulSoup(response.content, 'html.parser')
 
-        title = extract_element(soup, site_config.get('title_selector'))
-        content = extract_element(soup, site_config.get('content_selector'))
+        title = extract_element(soup, source_config.get('title_selector'))
+        content = extract_element(soup, source_config.get('content_selector'))
         content = clean_content(content)
         # time can be handled more specifically if needed (e.g., parsing datetime)
-        post_time = extract_element(soup, site_config.get('time_selector'))
-        image_url = extract_image_url(soup, site_config.get('featured_image_selector'), post_url)
+        post_time = extract_element(soup, source_config.get('time_selector'))
+        image_url = extract_image_url(soup, source_config.get('featured_image_selector'), post_url)
         if image_url:
             logging.info(f"Found featured image: {image_url}")
         else:
@@ -233,34 +226,29 @@ def process_single_post(post_doc):
             posts_collection.delete_one({'_id': post_id})
             return
 
-        username = source_config['username']
-        password = source_config['application_password']
-        base_urls = site_config['base_url']
-        if isinstance(base_urls, str):
-            if ',' in base_urls:
-                base_urls = [url.strip() for url in base_urls.split(',') if url.strip()]
-            else:
-                base_urls = [base_urls]
-        elif not isinstance(base_urls, list):
-            base_urls = []
+        domains = source_config.get('domains', [])
 
         failed_sites_collection = db['failed_sites']
-        active_urls = []
-        for base_url in base_urls:
+        active_domains = []
+        for domain in domains:
+            base_url = domain['base_url']
             failed_doc = failed_sites_collection.find_one({'site_url': base_url})
             if failed_doc and failed_doc['failed_at'] > datetime.utcnow() - timedelta(hours=1):
                 logging.info(f"Skipping recently failed site: {base_url}")
                 continue
-            active_urls.append(base_url)
+            active_domains.append(domain)
 
-        if not active_urls:
+        if not active_domains:
             logging.info("All sites failed recently, marking post as failed.")
             posts_collection.update_one({'_id': post_id}, {'$set': {'failed_at': datetime.utcnow()}})
             return
 
         all_posted_successfully = True
-        for base_url in active_urls:
-            category_name = site_config.get('category', 'uncategorized')
+        for domain in active_domains:
+            base_url = domain['base_url']
+            username = domain['username']
+            password = domain['application_password']
+            category_name = domain.get('category', 'uncategorized')
             category_id = get_category_id(base_url, username, password, category_name)
             post_data = {
                 'title': title,
