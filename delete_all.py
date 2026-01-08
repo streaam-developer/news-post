@@ -2,6 +2,7 @@ import json
 import requests
 from pymongo import MongoClient
 import logging
+import concurrent.futures
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -47,18 +48,18 @@ def delete_all_posts_and_images(base_url, username, password):
 
         # Delete featured image if exists
         if featured_media:
-            media_url = f"{base_url.rstrip('/')}/wp-json/wp/v2/media/{featured_media}"
+            media_url = f"{base_url.rstrip('/')}/wp-json/wp/v2/media/{featured_media}?force=true"
             try:
                 requests.delete(media_url, auth=(username, password), timeout=10)
-                logging.info(f"Deleted media {featured_media} from {base_url}")
+                logging.info(f"Permanently deleted media {featured_media} from {base_url}")
             except Exception as e:
                 logging.error(f"Failed to delete media {featured_media} from {base_url}: {e}")
 
-        # Delete post
-        post_url = f"{base_url.rstrip('/')}/wp-json/wp/v2/posts/{post_id}"
+        # Delete post permanently
+        post_url = f"{base_url.rstrip('/')}/wp-json/wp/v2/posts/{post_id}?force=true"
         try:
             requests.delete(post_url, auth=(username, password), timeout=10)
-            logging.info(f"Deleted post {post_id} from {base_url}")
+            logging.info(f"Permanently deleted post {post_id} from {base_url}")
         except Exception as e:
             logging.error(f"Failed to delete post {post_id} from {base_url}: {e}")
 
@@ -74,8 +75,10 @@ def clear_database():
 def main():
     """Main function to delete all posts and images from all domains and clear DB."""
     domains = get_all_domains()
-    for base_url, username, password in domains:
-        delete_all_posts_and_images(base_url, username, password)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(delete_all_posts_and_images, base_url, username, password) for base_url, username, password in domains]
+        for future in concurrent.futures.as_completed(futures):
+            pass  # Wait for all deletions to complete
     clear_database()
     logging.info("All posts, images, and database records deleted.")
 
