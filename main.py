@@ -56,7 +56,7 @@ def get_category_id(base_url, username, password, category_name):
     """Get category ID by name from WordPress."""
     url = f"{base_url.rstrip('/')}/wp-json/wp/v2/categories?search={category_name}"
     try:
-        res = requests.get(url, auth=(username, password), timeout=10)
+        res = requests.get(url, auth=(username, password), timeout=20)
         res.raise_for_status()
         cats = res.json()
         if cats:
@@ -73,7 +73,7 @@ def create_category(base_url, username, password, category_name):
     url = f"{base_url.rstrip('/')}/wp-json/wp/v2/categories"
     data = {'name': category_name}
     try:
-        res = requests.post(url, json=data, auth=(username, password), timeout=10)
+        res = requests.post(url, json=data, auth=(username, password), timeout=20)
         res.raise_for_status()
         cat = res.json()
         logging.info(f"Created category '{category_name}' on {base_url}, ID: {cat['id']}")
@@ -294,6 +294,15 @@ def process_single_post(post_doc):
             category_id = get_category_id(base_url, username, password, category_name)
             if not category_id:
                 category_id = create_category(base_url, username, password, category_name)
+                if not category_id:
+                    # Category creation failed, skip this site for 5 minutes
+                    failed_sites_collection.update_one(
+                        {'site_url': base_url},
+                        {'$set': {'failed_at': datetime.utcnow() - timedelta(minutes=55)}},
+                        upsert=True
+                    )
+                    logging.warning(f"Skipping {base_url} for 5 minutes due to category error.")
+                    continue
             if category_id:
                 categories_ids.append(category_id)
             post_data = {
