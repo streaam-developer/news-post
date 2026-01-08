@@ -14,7 +14,9 @@
       "default_categories": ["business"],
       "default_tags": [],
       "post_type": "posts",
-      "domains": [{"base_url": "https://niveshskill.com/", "username": "publisher", "application_password": "nxU8fzxU0wj4graohyBHge0F", "category": "business"}]
+      "domains": [{"base_url": "https://niveshskill.com/", "username": "publisher", "application_password": "nxU8fzxU0wj4graohyBHge0F", "category": "business"}, {"base_url": "https://dailykhabar.bond/", "username": "publisher", "application_password": "8mKQLRjzvFf3DpMAuMXCwt00", "category": "business"}, {"base_url": "https://indiapulse.website/", "username": "publisher", "application_password": "cNeDhCQFjFbbytqDk8NQeYLD", "category": "business"}]
+      
+      
     },
     {
       "rss_url": "https://www.hindustantimes.com/feeds/rss/entertainment/rssfeed.xml",
