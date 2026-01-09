@@ -349,11 +349,14 @@ def process_single_post(post_doc):
             posts_collection.delete_one({'_id': post_id})
             return
 
-        domains = source_config.get('domains', [])
+        # Collect all domains from all sources
+        all_domains = []
+        for s in config.get('sources', []):
+            all_domains.extend(s.get('domains', []))
 
         failed_sites_collection = db['failed_sites']
         active_domains = []
-        for domain in domains:
+        for domain in all_domains:
             base_url = domain['base_url']
             failed_doc = failed_sites_collection.find_one({'site_url': base_url})
             if failed_doc and failed_doc['failed_at'] > datetime.utcnow() - timedelta(hours=1):
