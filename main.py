@@ -219,13 +219,13 @@ def post_to_single_domain(domain, title, content, post_time, image_url, source_c
     if not category_id:
         category_id = create_category(base_url, username, password, category_name)
         if not category_id:
-            # Category creation failed, skip this site for 5 minutes
+            # Category creation failed, skip this site for 10 minutes
             failed_sites_collection.update_one(
                 {'site_url': base_url},
-                {'$set': {'failed_at': datetime.utcnow() - timedelta(minutes=55)}},
+                {'$set': {'failed_at': datetime.utcnow()}},
                 upsert=True
             )
-            logging.warning(f"Skipping {base_url} for 5 minutes due to category error.")
+            logging.warning(f"Skipping {base_url} for 10 minutes due to category error.")
             return
     if category_id:
         categories_ids.append(category_id)
@@ -359,7 +359,7 @@ def process_single_post(post_doc):
         for domain in all_domains:
             base_url = domain['base_url']
             failed_doc = failed_sites_collection.find_one({'site_url': base_url})
-            if failed_doc and failed_doc['failed_at'] > datetime.utcnow() - timedelta(hours=1):
+            if failed_doc and failed_doc['failed_at'] > datetime.utcnow() - timedelta(minutes=10):
                 logging.info(f"Skipping recently failed site: {base_url}")
                 continue
             active_domains.append(domain)
@@ -402,7 +402,7 @@ def process_multiple_posts():
     posts_collection = db['posts']
 
     filter_query = {'$or': [{'failed_at': {'$exists': False}}, {'failed_at': {'$lt': datetime.utcnow() - timedelta(minutes=30)}}]}
-    pending_posts = list(posts_collection.find(filter_query, sort=[('created_at', 1)], limit=30))
+    pending_posts = list(posts_collection.find(filter_query, sort=[('created_at', 1)], limit=10))
 
     if not pending_posts:
         logging.info("No pending posts found.")
