@@ -14,7 +14,7 @@ import threading
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-CONFIG_FILE = 'config.json'
+CONFIG_FILE = '/home/ubuntu/vps-wp-automation/config.json'
 
 def load_config():
     """Loads the configuration from config.json."""
