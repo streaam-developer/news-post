@@ -195,6 +195,101 @@ def upload_image(base_url, username, password, image_url):
     media_data = res.json()
     return media_data['id']
 
+def post_to_single_domain(domain, title, content, post_time, image_url, source_config, slug, posted_records_collection, failed_sites_collection, successful_posts_list):
+    """Posts to a single domain."""
+    base_url = domain['base_url']
+    if posted_records_collection.find_one({'site_url': base_url, 'slug': slug}):
+        logging.info(f"Already posted {slug} to {base_url}, skipping.")
+        successful_posts_list.append(1)
+        return
+
+    username = domain['username']
+    password = domain['application_password']
+    categories_ids = []
+    # Add default categories
+    for cat_name in source_config.get('default_categories', []):
+        cat_id = get_category_id(base_url, username, password, cat_name)
+        if not cat_id:
+            cat_id = create_category(base_url, username, password, cat_name)
+        if cat_id:
+            categories_ids.append(cat_id)
+    # Add domain specific category
+    category_name = domain.get('category', 'uncategorized')
+    category_id = get_category_id(base_url, username, password, category_name)
+    if not category_id:
+        category_id = create_category(base_url, username, password, category_name)
+        if not category_id:
+            # Category creation failed, skip this site for 5 minutes
+            failed_sites_collection.update_one(
+                {'site_url': base_url},
+                {'$set': {'failed_at': datetime.utcnow() - timedelta(minutes=55)}},
+                upsert=True
+            )
+            logging.warning(f"Skipping {base_url} for 5 minutes due to category error.")
+            return
+    if category_id:
+        categories_ids.append(category_id)
+    post_data = {
+        'title': title,
+        'content': content,
+        'status': source_config.get('default_status', 'publish'),
+        'slug': slug.replace('.cms', ''),
+        'categories': categories_ids,
+        'tags': source_config.get('default_tags', []),
+    }
+    if post_time:
+        try:
+            post_time_dt = datetime.fromisoformat(post_time)
+            post_data['date'] = post_time_dt.isoformat()
+        except ValueError:
+            logging.warning(f"Could not parse date: {post_time}")
+
+    # Upload featured image if available
+    if image_url:
+        try:
+            media_id = upload_image(base_url, username, password, image_url)
+            post_data['featured_media'] = media_id
+            logging.info(f"Uploaded featured image to {base_url}")
+        except Exception as e:
+            logging.error(f"Failed to upload featured image to {base_url}: {e}")
+
+    wp_api_url = f"{base_url.rstrip('/')}/wp-json/wp/v2/posts"
+    logging.info(f"Posting to {wp_api_url} with data: {post_data}")
+    try:
+        res = requests.post(
+            wp_api_url,
+            json=post_data,
+            auth=(username, password),
+            timeout=20,
+            headers={'Content-Type': 'application/json'}
+        )
+        logging.info(f"Response status code from {base_url}: {res.status_code}")
+        logging.info(f"Response headers from {base_url}: {res.headers}")
+        if res.status_code >= 400:
+            logging.error(f"Response body: {res.text[:500]}")
+        res.raise_for_status()
+        posted_records_collection.insert_one({
+            'site_url': base_url,
+            'slug': slug,
+            'posted_at': datetime.utcnow()
+        })
+        failed_sites_collection.delete_one({'site_url': base_url})
+        successful_posts_list.append(1)
+        try:
+            post_response = res.json()
+            logging.info(f"Successfully posted to {base_url}. Post ID: {post_response.get('id')}")
+        except ValueError:
+            logging.error(f"Posted to {base_url} but response is not JSON. Response: {res.text[:200]}")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to post to {base_url}: {e}")
+        if hasattr(e, 'response') and e.response:
+            logging.error(f"Response body: {e.response.text[:500]}")
+        failed_sites_collection.update_one(
+            {'site_url': base_url},
+            {'$set': {'failed_at': datetime.utcnow()}},
+            upsert=True
+        )
+
 def process_single_post(post_doc):
     """Processes a single pending post from the database and posts it to the corresponding WordPress site."""
     db = get_db_connection()
@@ -271,100 +366,17 @@ def process_single_post(post_doc):
             posts_collection.update_one({'_id': post_id}, {'$set': {'failed_at': datetime.utcnow()}})
             return
 
-        successful_posts = 0
+        successful_posts_list = []
+        threads = []
         for domain in active_domains:
-            base_url = domain['base_url']
-            if posted_records_collection.find_one({'site_url': base_url, 'slug': slug}):
-                logging.info(f"Already posted {slug} to {base_url}, skipping.")
-                successful_posts += 1
-                continue
+            t = threading.Thread(target=post_to_single_domain, args=(domain, title, content, post_time, image_url, source_config, slug, posted_records_collection, failed_sites_collection, successful_posts_list))
+            t.start()
+            threads.append(t)
 
-            username = domain['username']
-            password = domain['application_password']
-            categories_ids = []
-            # Add default categories
-            for cat_name in source_config.get('default_categories', []):
-                cat_id = get_category_id(base_url, username, password, cat_name)
-                if not cat_id:
-                    cat_id = create_category(base_url, username, password, cat_name)
-                if cat_id:
-                    categories_ids.append(cat_id)
-            # Add domain specific category
-            category_name = domain.get('category', 'uncategorized')
-            category_id = get_category_id(base_url, username, password, category_name)
-            if not category_id:
-                category_id = create_category(base_url, username, password, category_name)
-                if not category_id:
-                    # Category creation failed, skip this site for 5 minutes
-                    failed_sites_collection.update_one(
-                        {'site_url': base_url},
-                        {'$set': {'failed_at': datetime.utcnow() - timedelta(minutes=55)}},
-                        upsert=True
-                    )
-                    logging.warning(f"Skipping {base_url} for 5 minutes due to category error.")
-                    continue
-            if category_id:
-                categories_ids.append(category_id)
-            post_data = {
-                'title': title,
-                'content': content,
-                'status': source_config.get('default_status', 'publish'),
-                'slug': slug.replace('.cms', ''),
-                'categories': categories_ids,
-                'tags': source_config.get('default_tags', []),
-            }
-            if post_time:
-                try:
-                    post_time_dt = datetime.fromisoformat(post_time)
-                    post_data['date'] = post_time_dt.isoformat()
-                except ValueError:
-                    logging.warning(f"Could not parse date: {post_time}")
+        for t in threads:
+            t.join()
 
-            # Upload featured image if available
-            if image_url:
-                try:
-                    media_id = upload_image(base_url, username, password, image_url)
-                    post_data['featured_media'] = media_id
-                    logging.info(f"Uploaded featured image to {base_url}")
-                except Exception as e:
-                    logging.error(f"Failed to upload featured image to {base_url}: {e}")
-
-            wp_api_url = f"{base_url.rstrip('/')}/wp-json/wp/v2/posts"
-            logging.info(f"Posting to {wp_api_url} with data: {post_data}")
-            try:
-                res = requests.post(
-                    wp_api_url,
-                    json=post_data,
-                    auth=(username, password),
-                    timeout=20,
-                    headers={'Content-Type': 'application/json'}
-                )
-                logging.info(f"Response status code from {base_url}: {res.status_code}")
-                logging.info(f"Response headers from {base_url}: {res.headers}")
-                if res.status_code >= 400:
-                    logging.error(f"Response body: {res.text[:500]}")
-                res.raise_for_status()
-                posted_records_collection.insert_one({
-                    'site_url': base_url,
-                    'slug': slug,
-                    'posted_at': datetime.utcnow()
-                })
-                failed_sites_collection.delete_one({'site_url': base_url})
-                successful_posts += 1
-                try:
-                    post_response = res.json()
-                    logging.info(f"Successfully posted to {base_url}. Post ID: {post_response.get('id')}")
-                except ValueError:
-                    logging.error(f"Posted to {base_url} but response is not JSON. Response: {res.text[:200]}")
-            except requests.exceptions.RequestException as e:
-                logging.error(f"Failed to post to {base_url}: {e}")
-                if hasattr(e, 'response') and e.response:
-                    logging.error(f"Response body: {e.response.text[:500]}")
-                failed_sites_collection.update_one(
-                    {'site_url': base_url},
-                    {'$set': {'failed_at': datetime.utcnow()}},
-                    upsert=True
-                )
+        successful_posts = len(successful_posts_list)
 
         if successful_posts == len(active_domains):
             posts_collection.update_one({'_id': post_id}, {'$unset': {'failed_at': 1}})
